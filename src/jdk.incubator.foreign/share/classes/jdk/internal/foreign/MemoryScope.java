@@ -97,6 +97,20 @@ abstract class MemoryScope {
     private final Thread owner;
     private boolean closed; // = false
     private static final VarHandle CLOSED;
+    private static final MemoryScope AUTOMATIC_SCOPE = new MemoryScope(null) {
+        @Override
+        MemoryScope acquire() {
+            throw new UnsupportedOperationException("Should not call this");
+        }
+        @Override
+        void close() {
+            throw new UnsupportedOperationException("Should not call this");
+        }
+        @Override
+        MemoryScope dup(Thread newOwner) {
+            throw new UnsupportedOperationException("Should not call this");
+        }
+    };
 
     static {
         try {
@@ -108,6 +122,10 @@ abstract class MemoryScope {
 
     private MemoryScope(Thread owner) {
         this.owner = owner;
+    }
+
+    public static MemoryScope automatic() {
+        return AUTOMATIC_SCOPE;
     }
 
     /**

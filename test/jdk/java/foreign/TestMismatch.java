@@ -147,12 +147,13 @@ public class TestMismatch {
 
     @Test
     public void testClosed() {
-        var s1 = MemorySegment.ofArray(new byte[4]);
-        var s2 = MemorySegment.ofArray(new byte[4]);
-        s1.close();
-        assertThrows(ISE, () -> s1.mismatch(s1));
-        assertThrows(ISE, () -> s1.mismatch(s2));
-        assertThrows(ISE, () -> s2.mismatch(s1));
+        var s1 = MemorySegment.allocateNative(4);
+        try (var s2 = MemorySegment.allocateNative(4)) {
+            s1.close();
+            assertThrows(ISE, () -> s1.mismatch(s1));
+            assertThrows(ISE, () -> s1.mismatch(s2));
+            assertThrows(ISE, () -> s2.mismatch(s1));
+        }
     }
 
     @Test
@@ -175,41 +176,42 @@ public class TestMismatch {
 
     @Test
     public void testThreadAccess() throws Exception {
-        var segment = MemorySegment.ofArray(new byte[4]);
-        {
-            AtomicReference<RuntimeException> exception = new AtomicReference<>();
-            Runnable action = () -> {
-                try {
-                    MemorySegment.ofArray(new byte[4]).mismatch(segment);
-                } catch (RuntimeException e) {
-                    exception.set(e);
-                }
-            };
-            Thread thread = new Thread(action);
-            thread.start();
-            thread.join();
+        try (var segment = MemorySegment.allocateNative(4)) {
+            {
+                AtomicReference<RuntimeException> exception = new AtomicReference<>();
+                Runnable action = () -> {
+                    try (MemorySegment ms = MemorySegment.allocateNative(4)) {
+                        ms.mismatch(segment);
+                    } catch (RuntimeException e) {
+                        exception.set(e);
+                    }
+                };
+                Thread thread = new Thread(action);
+                thread.start();
+                thread.join();
 
-            RuntimeException e = exception.get();
-            if (!(e instanceof IllegalStateException)) {
-                throw e;
+                RuntimeException e = exception.get();
+                if (!(e instanceof IllegalStateException)) {
+                    throw e;
+                }
             }
-        }
-        {
-            AtomicReference<RuntimeException> exception = new AtomicReference<>();
-            Runnable action = () -> {
-                try {
-                    segment.mismatch(MemorySegment.ofArray(new byte[4]));
-                } catch (RuntimeException e) {
-                    exception.set(e);
-                }
-            };
-            Thread thread = new Thread(action);
-            thread.start();
-            thread.join();
+            {
+                AtomicReference<RuntimeException> exception = new AtomicReference<>();
+                Runnable action = () -> {
+                    try (MemorySegment ms = MemorySegment.allocateNative(4)) {
+                        segment.mismatch(ms);
+                    } catch (RuntimeException e) {
+                        exception.set(e);
+                    }
+                };
+                Thread thread = new Thread(action);
+                thread.start();
+                thread.join();
 
-            RuntimeException e = exception.get();
-            if (!(e instanceof IllegalStateException)) {
-                throw e;
+                RuntimeException e = exception.get();
+                if (!(e instanceof IllegalStateException)) {
+                    throw e;
+                }
             }
         }
     }

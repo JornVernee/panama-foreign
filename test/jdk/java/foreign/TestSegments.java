@@ -146,20 +146,28 @@ public class TestSegments {
         }
     }
 
-    @Test(dataProvider = "segmentFactories")
-    public void testAccessModesOfFactories(Supplier<MemorySegment> memorySegmentSupplier) {
+    @Test(dataProvider = "nativeSegmentFactories")
+    public void testAccessModesOfNativeFactories(Supplier<MemorySegment> memorySegmentSupplier) {
         try (MemorySegment segment = memorySegmentSupplier.get()) {
             assertTrue(segment.hasAccessModes(ALL_ACCESS));
             assertEquals(segment.accessModes(), ALL_ACCESS);
         }
     }
 
+    @Test(dataProvider = "heapSegmentFactories")
+    public void testAccessModesOfHeapFactories(Supplier<MemorySegment> memorySegmentSupplier) {
+        MemorySegment segment = memorySegmentSupplier.get();
+        assertTrue(segment.hasAccessModes(READ));
+        assertTrue(segment.hasAccessModes(WRITE));
+        assertEquals(segment.accessModes(), READ | WRITE);
+    }
+
+
     @Test(dataProvider = "accessModes")
     public void testAccessModes(int accessModes) {
-        int[] arr = new int[1];
         for (AccessActions action : AccessActions.values()) {
-            MemorySegment segment = MemorySegment.ofArray(arr);
-            MemorySegment restrictedSegment = segment.withAccessModes(accessModes);
+            MemorySegment original = MemorySegment.allocateNative(4);
+            MemorySegment restrictedSegment = original.withAccessModes(accessModes);
             assertEquals(restrictedSegment.accessModes(), accessModes);
             boolean shouldFail = !restrictedSegment.hasAccessModes(action.accessMode);
             try {
@@ -168,7 +176,33 @@ public class TestSegments {
             } catch (UnsupportedOperationException ex) {
                 assertTrue(shouldFail);
             }
+            if (original.isAlive())
+                original.close();
         }
+    }
+
+    @DataProvider
+    public Object[][] nativeSegmentFactories() {
+        List<Supplier<MemorySegment>> l = List.of(
+                () -> MemorySegment.allocateNative(4),
+                () -> MemorySegment.allocateNative(4, 8),
+                () -> MemorySegment.allocateNative(MemoryLayout.ofValueBits(32, ByteOrder.nativeOrder()))
+        );
+        return l.stream().map(s -> new Object[] { s }).toArray(Object[][]::new);
+    }
+
+    @DataProvider
+    public Object[][] heapSegmentFactories() {
+        List<Supplier<MemorySegment>> l = List.of(
+                () -> MemorySegment.ofArray(new byte[] { 0x00, 0x01, 0x02, 0x03 }),
+                () -> MemorySegment.ofArray(new char[] {'a', 'b', 'c', 'd' }),
+                () -> MemorySegment.ofArray(new double[] { 1d, 2d, 3d, 4d} ),
+                () -> MemorySegment.ofArray(new float[] { 1.0f, 2.0f, 3.0f, 4.0f }),
+                () -> MemorySegment.ofArray(new int[] { 1, 2, 3, 4 }),
+                () -> MemorySegment.ofArray(new long[] { 1l, 2l, 3l, 4l } ),
+                () -> MemorySegment.ofArray(new short[] { 1, 2, 3, 4 } )
+        );
+        return l.stream().map(s -> new Object[] { s }).toArray(Object[][]::new);
     }
 
     @DataProvider(name = "segmentFactories")
@@ -194,28 +228,30 @@ public class TestSegments {
                 .varHandle(byte.class, MemoryLayout.PathElement.sequenceElement());
 
         for (byte value : new byte[] {(byte) 0xFF, (byte) 0x00, (byte) 0x45}) {
-            try (MemorySegment segment = memorySegmentSupplier.get()) {
-                segment.fill(value);
-                for (long l = 0; l < segment.byteSize(); l++) {
-                    assertEquals((byte) byteHandle.get(segment.baseAddress(), l), value);
-                }
-
-                // fill a slice
-                var sliceSegment = segment.asSlice(1, segment.byteSize() - 2).fill((byte) ~value);
-                for (long l = 0; l < sliceSegment.byteSize(); l++) {
-                    assertEquals((byte) byteHandle.get(sliceSegment.baseAddress(), l), ~value);
-                }
-                // assert enclosing slice
-                assertEquals((byte) byteHandle.get(segment.baseAddress(), 0L), value);
-                for (long l = 1; l < segment.byteSize() - 2; l++) {
-                    assertEquals((byte) byteHandle.get(segment.baseAddress(), l), (byte) ~value);
-                }
-                assertEquals((byte) byteHandle.get(segment.baseAddress(), segment.byteSize() - 1L), value);
+            MemorySegment segment = memorySegmentSupplier.get();
+            segment.fill(value);
+            for (long l = 0; l < segment.byteSize(); l++) {
+                assertEquals((byte) byteHandle.get(segment.baseAddress(), l), value);
             }
+
+            // fill a slice
+            var sliceSegment = segment.asSlice(1, segment.byteSize() - 2).fill((byte) ~value);
+            for (long l = 0; l < sliceSegment.byteSize(); l++) {
+                assertEquals((byte) byteHandle.get(sliceSegment.baseAddress(), l), ~value);
+            }
+            // assert enclosing slice
+            assertEquals((byte) byteHandle.get(segment.baseAddress(), 0L), value);
+            for (long l = 1; l < segment.byteSize() - 2; l++) {
+                assertEquals((byte) byteHandle.get(segment.baseAddress(), l), (byte) ~value);
+            }
+            assertEquals((byte) byteHandle.get(segment.baseAddress(), segment.byteSize() - 1L), value);
+
+            if (segment.hasAccessModes(CLOSE))
+                segment.close();
         }
     }
 
-    @Test(dataProvider = "segmentFactories", expectedExceptions = IllegalStateException.class)
+    @Test(dataProvider = "nativeSegmentFactories", expectedExceptions = IllegalStateException.class)
     public void testFillClosed(Supplier<MemorySegment> memorySegmentSupplier) {
         MemorySegment segment = memorySegmentSupplier.get();
         segment.close();
@@ -229,7 +265,7 @@ public class TestSegments {
         }
     }
 
-    @Test(dataProvider = "segmentFactories")
+    @Test(dataProvider = "nativeSegmentFactories")
     public void testFillThread(Supplier<MemorySegment> memorySegmentSupplier) throws Exception {
         try (MemorySegment segment = memorySegmentSupplier.get()) {
             AtomicReference<RuntimeException> exception = new AtomicReference<>();

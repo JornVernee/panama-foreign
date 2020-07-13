@@ -118,9 +118,9 @@ public class TestNativeScope {
 
     @Test
     public void testAttachClose() {
-        MemorySegment s1 = MemorySegment.ofArray(new byte[1]);
-        MemorySegment s2 = MemorySegment.ofArray(new byte[1]);
-        MemorySegment s3 = MemorySegment.ofArray(new byte[1]);
+        MemorySegment s1 = MemorySegment.allocateNative(1);
+        MemorySegment s2 = MemorySegment.allocateNative(1);
+        MemorySegment s3 = MemorySegment.allocateNative(1);
         assertTrue(s1.isAlive());
         assertTrue(s2.isAlive());
         assertTrue(s3.isAlive());
@@ -146,7 +146,7 @@ public class TestNativeScope {
     @Test
     public void testNoTerminalOps() {
         try (NativeScope scope = NativeScope.boundedScope(10)) {
-            MemorySegment s1 = MemorySegment.ofArray(new byte[1]);
+            MemorySegment s1 = MemorySegment.allocateNative(1);
             MemorySegment attached = scope.register(s1);
             int[] terminalOps = {CLOSE, HANDOFF};
             for (int mode : terminalOps) {
@@ -172,9 +172,11 @@ public class TestNativeScope {
 
     @Test(expectedExceptions = IllegalStateException.class)
     public void testNotAliveClaim() {
-        MemorySegment segment = MemorySegment.ofArray(new byte[1]);
+        MemorySegment segment = MemorySegment.allocateNative(1);
         segment.close();
-        NativeScope.boundedScope(10).register(segment);
+        try (var scope = NativeScope.boundedScope(10)) {
+            scope.register(segment);
+        }
     }
 
     @Test

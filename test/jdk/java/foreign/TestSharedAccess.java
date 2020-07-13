@@ -175,7 +175,9 @@ public class TestSharedAccess {
 
     @Test(expectedExceptions=IllegalArgumentException.class)
     public void testBadHandoffSameThread() {
-        MemorySegment.ofArray(new int[4]).withOwnerThread(Thread.currentThread());
+        try (MemorySegment ms = MemorySegment.allocateNative(4)) {
+            ms.withOwnerThread(Thread.currentThread());
+        }
     }
 
     @Test(expectedExceptions=NullPointerException.class)

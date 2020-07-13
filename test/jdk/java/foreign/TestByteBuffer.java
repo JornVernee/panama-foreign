@@ -485,8 +485,8 @@ public class TestByteBuffer {
     public void testCopyHeapToNative(Consumer<MemoryAddress> checker, Consumer<MemoryAddress> initializer, SequenceLayout seq) {
         checkByteArrayAlignment(seq.elementLayout());
         int bytes = (int)seq.byteSize();
-        try (MemorySegment nativeArray = MemorySegment.allocateNative(bytes);
-             MemorySegment heapArray = MemorySegment.ofArray(new byte[bytes])) {
+        try (MemorySegment nativeArray = MemorySegment.allocateNative(bytes)) {
+            MemorySegment heapArray = MemorySegment.ofArray(new byte[bytes]);
             initializer.accept(heapArray.baseAddress());
             nativeArray.copyFrom(heapArray);
             checker.accept(nativeArray.baseAddress());
@@ -497,8 +497,8 @@ public class TestByteBuffer {
     public void testCopyNativeToHeap(Consumer<MemoryAddress> checker, Consumer<MemoryAddress> initializer, SequenceLayout seq) {
         checkByteArrayAlignment(seq.elementLayout());
         int bytes = (int)seq.byteSize();
-        try (MemorySegment nativeArray = MemorySegment.allocateNative(seq);
-             MemorySegment heapArray = MemorySegment.ofArray(new byte[bytes])) {
+        try (MemorySegment nativeArray = MemorySegment.allocateNative(seq)) {
+            MemorySegment heapArray = MemorySegment.ofArray(new byte[bytes]);
             initializer.accept(nativeArray.baseAddress());
             heapArray.copyFrom(nativeArray);
             checker.accept(heapArray.baseAddress());

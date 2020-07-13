@@ -139,7 +139,7 @@ public class TestArrays {
           expectedExceptions = UnsupportedOperationException.class)
     public void testArrayFromHeapSegmentWithoutAccess(MemoryLayout layout, Function<MemorySegment, Object> arrayFactory) {
         MemorySegment segment = MemorySegment.ofArray(new byte[(int)layout.byteSize()]);
-        segment = segment.withAccessModes(MemorySegment.ALL_ACCESS & ~READ);
+        segment = segment.withAccessModes(segment.accessModes() & ~READ);
         arrayFactory.apply(segment);
     }
 
