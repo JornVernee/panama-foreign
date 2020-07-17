@@ -70,6 +70,10 @@ class Parser {
         Cursor tuCursor = tu.getCursor();
         tuCursor.children().
             forEach(c -> {
+                if (JextractTaskImpl.LOG_CURSORS) {
+                    System.out.printf("parsing cursor: %s%n", c.spelling());
+                }
+
                 SourceLocation loc = c.getSourceLocation();
                 if (loc == null) {
                     return;

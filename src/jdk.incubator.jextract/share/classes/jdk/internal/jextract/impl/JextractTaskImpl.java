@@ -43,6 +43,7 @@ public class JextractTaskImpl implements JextractTask {
     private final boolean compileSources;
     private final List<Path> headers;
     static final boolean VERBOSE = Boolean.getBoolean("jextract.verbose");
+    static final boolean LOG_CURSORS = Boolean.getBoolean("jextract.log.cursors");
 
     public JextractTaskImpl(boolean compileSources, Path... headers) {
         this.compileSources = compileSources;
