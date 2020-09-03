@@ -65,7 +65,7 @@ struct MyStruct {
     struct {
         int i;
         int j;
-    } k;
+    } k1;
 };
 
 union MyUnion {
@@ -90,7 +90,7 @@ union MyUnion {
     union {
         int i;
         long j;
-    } k;
+    } k2;
 };
 
 struct X {

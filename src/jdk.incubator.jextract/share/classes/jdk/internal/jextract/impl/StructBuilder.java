@@ -33,20 +33,19 @@ import jdk.incubator.jextract.Type;
  * This class generates static utilities class for C structs, unions.
  */
 class StructBuilder extends JavaSourceBuilder {
-
     private final JavaSourceBuilder prev;
-    private final String parentLayoutFieldName;
-    private final MemoryLayout parentLayout;
+    protected final MemoryLayout parentLayout;
+    protected final String parentLayoutFieldName;
     private final String structAnno;
     private final String structArrayAnno;
     private final String structPtrAnno;
 
-    StructBuilder(JavaSourceBuilder prev, String className, String parentLayoutFieldName, MemoryLayout parentLayout,
+    StructBuilder(JavaSourceBuilder prev, String className, MemoryLayout parentLayout,
             String pkgName, ConstantHelper constantHelper, AnnotationWriter annotationWriter, Type structType) {
         super(prev.uniqueNestedClassName(className), pkgName, constantHelper);
         this.prev = prev;
-        this.parentLayoutFieldName = parentLayoutFieldName;
         this.parentLayout = parentLayout;
+        this.parentLayoutFieldName = className + "$struct";
         this.structAnno = annotationWriter.getCAnnotation(structType);
         this.structArrayAnno = annotationWriter.getCAnnotation(Type.array(structType));
         this.structPtrAnno = annotationWriter.getCAnnotation(Type.pointer(structType));
@@ -92,17 +91,15 @@ class StructBuilder extends JavaSourceBuilder {
     }
 
     @Override
-    protected void addPackagePrefix() {
-        // nested class. containing class has necessary package declaration
+    void prologue() {
+        incrAlign();
+        classBegin();
+        emitConstructor();
+        addLayoutGetter(parentLayoutFieldName, parentLayout);
     }
 
     @Override
-    protected void addImportSection() {
-        // nested class. containing class has necessary imports
-    }
-
-    @Override
-    JavaSourceBuilder classEnd() {
+    void epilogue() {
         emitSizeof();
         emitAllocate();
         emitScopeAllocate();
@@ -110,7 +107,8 @@ class StructBuilder extends JavaSourceBuilder {
         emitScopeAllocateArray();
         emitAllocatePoiner();
         emitScopeAllocatePointer();
-        return super.classEnd();
+        classEnd();
+        decrAlign();
     }
 
     private String getQualifiedName(String fieldName) {

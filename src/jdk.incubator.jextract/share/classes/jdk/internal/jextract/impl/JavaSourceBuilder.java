@@ -45,6 +45,7 @@ abstract class JavaSourceBuilder {
 
     Set<String> nestedClassNames = new HashSet<>();
     int nestedClassNameCount = 0;
+    private int anonymousID = 0;
 
     JavaSourceBuilder(String className, String pkgName, ConstantHelper constantHelper, int align) {
         this.className = className;
@@ -74,15 +75,19 @@ abstract class JavaSourceBuilder {
         return PUB_CLS_MODS;
     }
 
-    void classBegin() {
-        addPackagePrefix();
-        addImportSection();
-
+    protected void classBegin() {
         indent();
         append(getClassModifiers());
         append("class ");
         append(className);
         append(" {\n\n");
+    }
+
+    void prologue() {
+        incrAlign();
+        addPackagePrefix();
+        addImportSection();
+        classBegin();
         emitConstructor();
     }
 
@@ -96,10 +101,13 @@ abstract class JavaSourceBuilder {
         decrAlign();
     }
 
-    JavaSourceBuilder classEnd() {
+    protected void classEnd() {
         indent();
         append("}\n\n");
-        return prev();
+    }
+
+    void epilogue() {
+        classEnd();
     }
 
     void addLayoutGetter(String javaName, MemoryLayout layout) {
@@ -224,4 +232,7 @@ abstract class JavaSourceBuilder {
         return nestedClassNames.add(name.toLowerCase()) ? name : (name + "$" + nestedClassNameCount++);
     }
 
+    public String nextAnonymousName() {
+        return className + "$anon" + anonymousID++;
+    }
 }

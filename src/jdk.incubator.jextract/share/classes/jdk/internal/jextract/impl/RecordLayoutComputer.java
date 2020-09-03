@@ -101,12 +101,10 @@ abstract class RecordLayoutComputer {
     }
 
     void addFieldLayout(long offset, Type parent, Cursor c) {
-        if (c.isAnonymousStruct()) {
-            GroupLayout layout = (GroupLayout) compute(offset, parent, c.type());
-            fieldLayouts.addAll(layout.memberLayouts());
-        } else {
-            addFieldLayout(fieldLayout(c));
-        }
+        MemoryLayout MemoryLayout = c.isAnonymousStruct()?
+            compute(offset, parent, c.type()) :
+            fieldLayout(c);
+        addFieldLayout(MemoryLayout);
     }
 
     MemoryLayout fieldLayout(Cursor c) {

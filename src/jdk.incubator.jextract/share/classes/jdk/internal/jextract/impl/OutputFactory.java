@@ -130,7 +130,7 @@ public class OutputFactory implements Declaration.Visitor<Void, Declaration> {
     static final String C_LANG_CONSTANTS_HOLDER = getCLangConstantsHolder();
 
     JavaFileObject[] generate(Declaration.Scoped decl) {
-        toplevelBuilder.classBegin();
+        toplevelBuilder.prologue();
         //generate all decls
         decl.members().forEach(this::generateDecl);
         // check if unresolved typedefs can be resolved now!
@@ -138,7 +138,7 @@ public class OutputFactory implements Declaration.Visitor<Void, Declaration> {
             Declaration.Scoped structDef = ((Type.Declared)td.type()).tree();
             toplevelBuilder.emitTypedef(td, structDefinitionSeen(structDef)? structDefinitionName(structDef) : null);
         }
-        toplevelBuilder.classEnd();
+        toplevelBuilder.epilogue();
         try {
             List<JavaFileObject> files = new ArrayList<>();
             files.add(toplevelBuilder.build());
@@ -208,31 +208,31 @@ public class OutputFactory implements Declaration.Visitor<Void, Declaration> {
             return null;
         }
         boolean structClass = false;
-        if (!d.name().isEmpty() || !isRecord(parent)) {
-            //only add explicit struct layout if the struct is not to be flattened inside another struct
-            switch (d.kind()) {
-                case STRUCT:
-                case UNION: {
-                    structClass = true;
-                    String className = d.name().isEmpty() ? parent.name() : d.name();
-                    MemoryLayout parentLayout = parentLayout(d);
-                    String parentLayoutFieldName = className + "$struct";
-                    currentBuilder = new StructBuilder(currentBuilder, className, parentLayoutFieldName, parentLayout,
-                            pkgName, constantHelper, annotationWriter, Type.declared(d));
-                    addStructDefinition(d, currentBuilder.className);
-                    currentBuilder.incrAlign();
-                    currentBuilder.classBegin();
-                    currentBuilder.addLayoutGetter(parentLayoutFieldName, d.layout().get());
-                    break;
-                }
+        boolean isAnonyousNested = d.name().isEmpty() && isRecord(parent);
+        switch (d.kind()) {
+            case STRUCT, UNION -> {
+                structClass = true;
+                String className = className(d, parent, isAnonyousNested);
+                MemoryLayout parentLayout = parentLayout(d);
+                currentBuilder = isAnonyousNested
+                    ? new AnonStructBuilder(currentBuilder, className, parentLayout, pkgName, constantHelper, annotationWriter, Type.declared(d))
+                    : new StructBuilder(currentBuilder, className, parentLayout, pkgName, constantHelper, annotationWriter, Type.declared(d));
+                addStructDefinition(d, currentBuilder.className);
+                currentBuilder.prologue();
             }
         }
         d.members().forEach(fieldTree -> fieldTree.accept(this, d));
         if (structClass) {
-            currentBuilder = currentBuilder.classEnd();
-            currentBuilder.decrAlign();
+            currentBuilder.epilogue();
+            currentBuilder = currentBuilder.prev();
         }
         return null;
+    }
+
+    private String className(Declaration.Scoped d, Declaration parent, boolean isAnonyousNested) {
+        return isAnonyousNested
+            ? currentBuilder.nextAnonymousName()
+            : d.name().isEmpty() ? parent.name() : d.name();
     }
 
     private static final boolean isVaList(FunctionDescriptor desc) {
