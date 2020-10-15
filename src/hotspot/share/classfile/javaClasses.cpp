@@ -3823,15 +3823,17 @@ int jdk_internal_invoke_NativeEntryPoint::_returnMoves_offset;
 int jdk_internal_invoke_NativeEntryPoint::_need_transition_offset;
 int jdk_internal_invoke_NativeEntryPoint::_method_type_offset;
 int jdk_internal_invoke_NativeEntryPoint::_name_offset;
+int jdk_internal_invoke_NativeEntryPoint::_c2RegSavePolicy_offset;
 
 #define NEP_FIELDS_DO(macro) \
-  macro(_addr_offset,            k, "addr",           long_signature, false); \
-  macro(_shadow_space_offset,    k, "shadowSpace",    int_signature, false); \
-  macro(_argMoves_offset,        k, "argMoves",       long_array_signature, false); \
-  macro(_returnMoves_offset,     k, "returnMoves",    long_array_signature, false); \
-  macro(_need_transition_offset, k, "needTransition", bool_signature, false); \
-  macro(_method_type_offset,     k, "methodType",     java_lang_invoke_MethodType_signature, false); \
-  macro(_name_offset,            k, "name",           string_signature, false);
+  macro(_addr_offset,            k, "addr",            long_signature, false); \
+  macro(_shadow_space_offset,    k, "shadowSpace",     int_signature, false); \
+  macro(_argMoves_offset,        k, "argMoves",        long_array_signature, false); \
+  macro(_returnMoves_offset,     k, "returnMoves",     long_array_signature, false); \
+  macro(_need_transition_offset, k, "needTransition",  bool_signature, false); \
+  macro(_method_type_offset,     k, "methodType",      java_lang_invoke_MethodType_signature, false); \
+  macro(_name_offset,            k, "name",            string_signature, false); \
+  macro(_c2RegSavePolicy_offset, k, "c2RegSavePolicy", string_signature, false);
 
 bool jdk_internal_invoke_NativeEntryPoint::is_instance(oop obj) {
   return obj != NULL && is_subclass(obj->klass());
@@ -3874,6 +3876,10 @@ oop jdk_internal_invoke_NativeEntryPoint::method_type(oop entry) {
 
 oop jdk_internal_invoke_NativeEntryPoint::name(oop entry) {
   return entry->obj_field(_name_offset);
+}
+
+oop jdk_internal_invoke_NativeEntryPoint::c2RegSavePolicy(oop entry) {
+  return entry->obj_field(_c2RegSavePolicy_offset);
 }
 
 oop java_lang_invoke_MethodHandle::type(oop mh) {

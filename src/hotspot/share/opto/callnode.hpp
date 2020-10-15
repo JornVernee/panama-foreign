@@ -834,16 +834,19 @@ public:
   GrowableArray<VMReg> _ret_regs;
   const int _shadow_space_bytes;
   const bool _need_transition;
+  const char* _reg_save_policy;
 
   CallNativeNode(const TypeFunc* tf, address addr, const char* name,
                  const TypePtr* adr_type,
                  const GrowableArray<VMReg>& arg_regs,
                  const GrowableArray<VMReg>& ret_regs,
                  int shadow_space_bytes,
-                 bool need_transition)
+                 bool need_transition,
+                 const char* reg_save_policy)
     : CallNode(tf, addr, adr_type), _arg_regs(arg_regs),
       _ret_regs(ret_regs), _shadow_space_bytes(shadow_space_bytes),
-      _need_transition(need_transition)
+      _need_transition(need_transition),
+      _reg_save_policy(reg_save_policy)
   {
     init_class_id(Class_CallNative);
     _name = name;

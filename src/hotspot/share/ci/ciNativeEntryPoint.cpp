@@ -45,16 +45,24 @@ VMReg* getVMRegArray(ciArray* array) {
   return out;
 }
 
+static const char* toCString(oop string_oop) {
+  char* temp_str = java_lang_String::as_quoted_ascii(string_oop);
+  size_t len = strlen(temp_str) + 1;
+  char* str = (char*)CURRENT_ENV->arena()->Amalloc(len);
+  strncpy(str, temp_str, len);
+  return str;
+}
+
 ciNativeEntryPoint::ciNativeEntryPoint(instanceHandle h_i) : ciInstance(h_i), _name(NULL) {
   // Copy name
   oop name_str = jdk_internal_invoke_NativeEntryPoint::name(get_oop());
   if (name_str != NULL) {
-    char* temp_name = java_lang_String::as_quoted_ascii(name_str);
-    size_t len = strlen(temp_name) + 1;
-    char* name = (char*)CURRENT_ENV->arena()->Amalloc(len);
-    strncpy(name, temp_name, len);
-    _name = name;
+    _name = toCString(name_str);
   }
+
+  oop c2RegSavePolicy_str = jdk_internal_invoke_NativeEntryPoint::c2RegSavePolicy(get_oop());
+  assert(c2RegSavePolicy_str != NULL, "Must have save policy");
+  _c2RegSavePolicy = toCString(c2RegSavePolicy_str);
 
   _arg_moves = getVMRegArray(CURRENT_ENV->get_object(jdk_internal_invoke_NativeEntryPoint::argMoves(get_oop()))->as_array());
   _ret_moves = getVMRegArray(CURRENT_ENV->get_object(jdk_internal_invoke_NativeEntryPoint::returnMoves(get_oop()))->as_array());
@@ -88,6 +96,10 @@ ciMethodType* ciNativeEntryPoint::method_type() const {
   return CURRENT_ENV->get_object(jdk_internal_invoke_NativeEntryPoint::method_type(get_oop()))->as_method_type();
 }
 
-const char* ciNativeEntryPoint::name() {
+const char* ciNativeEntryPoint::name() const {
   return _name;
+}
+
+const char* ciNativeEntryPoint::c2RegSavePolicy() const {
+  return _c2RegSavePolicy;
 }

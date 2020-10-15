@@ -36,6 +36,7 @@
 class ciNativeEntryPoint : public ciInstance {
 private:
   const char* _name;
+  const char* _c2RegSavePolicy;
   VMReg* _arg_moves;
   VMReg* _ret_moves;
 public:
@@ -47,10 +48,11 @@ public:
   address        entry_point() const;
   jint           shadow_space() const;
   VMReg*         argMoves() const;
-  VMReg*        returnMoves() const;
+  VMReg*         returnMoves() const;
   jboolean       need_transition() const;
   ciMethodType*  method_type() const;
-  const char*    name();
+  const char*    name() const;
+  const char*    c2RegSavePolicy() const;
 };
 
 #endif // SHARE_VM_CI_CINATIVEENTRYPOINT_HPP

@@ -4193,7 +4193,7 @@ void ArchDesc::buildFrameMethods(FILE *fp_cpp) {
           _frame->_frame_pointer);
   */
   // (Native) Frame Pointer definition
-  fprintf(fp_cpp,"OptoReg::Name Matcher::c_frame_pointer() const {");
+  fprintf(fp_cpp,"OptoReg::Name Matcher::c_frame_pointer() {");
   fprintf(fp_cpp," return OptoReg::Name(%s_num); }\n\n",
           _frame->_frame_pointer);
 

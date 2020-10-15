@@ -26,4 +26,5 @@ package jdk.internal.invoke;
 
 public interface ABIDescriptorProxy {
     int shadowSpaceBytes();
+    VMStorageProxy[] allVoltatileRegs();
 }

@@ -839,7 +839,7 @@ uint PhaseCFG::sched_call(Block* block, uint node_cnt, Node_List& worklist, Grow
 
   // Act as if the call defines the Frame Pointer.
   // Certainly the FP is alive and well after the call.
-  regs.Insert(_matcher.c_frame_pointer());
+  regs.Insert(Matcher::c_frame_pointer());
 
   // Set all registers killed and not already defined by the call.
   uint r_cnt = mcall->tf()->range()->cnt();
@@ -864,10 +864,7 @@ uint PhaseCFG::sched_call(Block* block, uint node_cnt, Node_List& worklist, Grow
       save_policy = _matcher._register_save_policy;
       break;
     case Op_CallNative:
-      // We use the c reg save policy here since Panama
-      // only supports the C ABI currently.
-      // TODO compute actual save policy based on nep->abi
-      save_policy = _matcher._c_reg_save_policy;
+      save_policy = mcall->as_MachCallNative()->_reg_save_policy;
       break;
 
     default:
@@ -1135,7 +1132,7 @@ bool PhaseCFG::schedule_local(Block* block, GrowableArray<int>& ready_cnt, Vecto
 
     if (n->is_Mach() && n->as_Mach()->has_call()) {
       RegMask regs;
-      regs.Insert(_matcher.c_frame_pointer());
+      regs.Insert(Matcher::c_frame_pointer());
       regs.OR(n->out_RegMask());
 
       MachProjNode *proj = new MachProjNode( n, 1, RegMask::Empty, MachProjNode::fat_proj );

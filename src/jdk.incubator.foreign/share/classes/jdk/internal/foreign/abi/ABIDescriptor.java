@@ -25,6 +25,10 @@
 package jdk.internal.foreign.abi;
 
 import jdk.internal.invoke.ABIDescriptorProxy;
+import jdk.internal.invoke.VMStorageProxy;
+
+import java.util.Arrays;
+import java.util.stream.Stream;
 
 public class ABIDescriptor implements ABIDescriptorProxy {
     final Architecture arch;
@@ -50,5 +54,13 @@ public class ABIDescriptor implements ABIDescriptorProxy {
     @Override
     public int shadowSpaceBytes() {
         return shadowSpace;
+    }
+
+    @Override
+    public VMStorageProxy[] allVoltatileRegs() {
+        return Stream.of(inputStorage, outputStorage, volatileStorage)
+              .flatMap(Arrays::stream)
+              .flatMap(Arrays::stream)
+              .toArray(VMStorageProxy[]::new);
     }
 }

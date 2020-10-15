@@ -49,8 +49,10 @@ public class NativeEntryPoint {
     private final MethodType methodType; // C2 sees erased version (byte -> int), so need this explicitly
     private final String name;
 
+    private final String c2RegSavePolicy;
+
     private NativeEntryPoint(long addr, int shadowSpace, long[] argMoves, long[] returnMoves,
-                     boolean needTransition, MethodType methodType, String name) {
+                             boolean needTransition, MethodType methodType, String name, String c2RegSavePolicy) {
         this.addr = addr;
         this.shadowSpace = shadowSpace;
         this.argMoves = Objects.requireNonNull(argMoves);
@@ -58,16 +60,21 @@ public class NativeEntryPoint {
         this.needTransition = needTransition;
         this.methodType = methodType;
         this.name = name;
+        this.c2RegSavePolicy = c2RegSavePolicy;
     }
 
-    public static NativeEntryPoint make(long addr, String name, ABIDescriptorProxy abi, VMStorageProxy[] argMoves, VMStorageProxy[] returnMoves,
+    public static NativeEntryPoint make(long addr, String name, ABIDescriptorProxy abi,
+                                        VMStorageProxy[] argMoves, VMStorageProxy[] returnMoves,
                                         boolean needTransition, MethodType methodType) {
         if (returnMoves.length > 1) {
             throw new IllegalArgumentException("Multiple register return not supported");
         }
 
-        return new NativeEntryPoint(
-            addr, abi.shadowSpaceBytes(), encodeVMStorages(argMoves), encodeVMStorages(returnMoves), needTransition, methodType, name);
+        String regSavePolicy = computeRegSavePolicy(abi.allVoltatileRegs());
+
+        return new NativeEntryPoint(addr, abi.shadowSpaceBytes(),
+                encodeVMStorages(argMoves), encodeVMStorages(returnMoves),
+                needTransition, methodType, name, regSavePolicy);
     }
 
     private static long[] encodeVMStorages(VMStorageProxy[] moves) {
@@ -79,6 +86,7 @@ public class NativeEntryPoint {
     }
 
     private static native long vmStorageToVMReg(int type, int index);
+    private static native String computeRegSavePolicy(VMStorageProxy[] allVoltatileRegs);
 
     public MethodType type() {
         return methodType;

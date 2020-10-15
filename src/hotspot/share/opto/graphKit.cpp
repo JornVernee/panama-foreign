@@ -2643,7 +2643,8 @@ Node* GraphKit::make_native_call(const TypeFunc* call_type, uint nargs, ciNative
                                             arg_regs,
                                             ret_regs,
                                             nep->shadow_space(),
-                                            nep->need_transition());
+                                            nep->need_transition(),
+                                            nep->c2RegSavePolicy());
 
   if (call->_need_transition) {
     add_safepoint_edges(call);

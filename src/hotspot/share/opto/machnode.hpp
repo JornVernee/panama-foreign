@@ -1017,6 +1017,7 @@ class MachCallNativeNode: public MachCallNode {
   void print_regs(const GrowableArray<VMReg>& regs, outputStream* st) const;
 public:
   const char *_name;
+  const char* _reg_save_policy;
   GrowableArray<VMReg> _arg_regs;
   GrowableArray<VMReg> _ret_regs;
 
