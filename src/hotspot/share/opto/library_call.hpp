@@ -306,6 +306,7 @@ class LibraryCallKit : public GraphKit {
   bool inline_fp_min_max(vmIntrinsics::ID id);
 
   bool inline_profileBoolean();
+  bool inline_profileReferenceType();
   bool inline_isCompileConstant();
 
   // Vector API support

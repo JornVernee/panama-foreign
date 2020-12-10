@@ -6001,6 +6001,23 @@ assertEquals("boojum", (String) catTrace.invokeExact("boo", "jum"));
         return MethodHandleImpl.makeGuardWithTest(test, target, fallback);
     }
 
+    /**
+     * Return MH that profiles the dynamic type of its argument.
+     *
+     * <p>A total of {@code trackedTypes} types are check, others
+     * are skipped. First come first served, so this should only
+     * be used when to total number of possible types is known.
+     *
+     * @param type the type of the argument
+     * @param trackedTypes the number of types to profile
+     * @return the method handle that profiles the type
+     */
+    public static MethodHandle profileReferenceType(Class<?> type) {
+        if (type.isPrimitive())
+            throw newIllegalArgumentException("not a reference type, " + type);
+        return MethodHandleImpl.makeProfileReferenceType(type);
+    }
+
     static <T> RuntimeException misMatchedTypes(String what, T t1, T t2) {
         return newIllegalArgumentException(what + " must match: " + t1 + " != " + t2);
     }

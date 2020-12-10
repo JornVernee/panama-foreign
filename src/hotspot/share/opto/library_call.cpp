@@ -601,6 +601,8 @@ bool LibraryCallKit::try_to_inline(int predicate) {
 
   case vmIntrinsics::_profileBoolean:
     return inline_profileBoolean();
+  case vmIntrinsics::_profileReferenceType:
+    return inline_profileReferenceType();
   case vmIntrinsics::_isCompileConstant:
     return inline_isCompileConstant();
 
@@ -6691,6 +6693,83 @@ bool LibraryCallKit::inline_profileBoolean() {
     set_result(profile);
     return true;
   } else {
+    // Continue profiling.
+    // Profile data isn't available at the moment. So, execute method's bytecode version.
+    // Usually, when GWT LambdaForms are profiled it means that a stand-alone nmethod
+    // is compiled and counters aren't available since corresponding MethodHandle
+    // isn't a compile-time constant.
+    return false;
+  }
+}
+
+bool LibraryCallKit::inline_profileReferenceType() {
+  Node* class_box = argument(1);
+  Node* bottom = argument(2);
+  const TypeAryPtr* class_box_ary = nullptr;
+  ciArray* class_box_aobj = nullptr;
+  const TypeOopPtr* bottom_type = nullptr;
+  ciObject* bottom_obj = nullptr;
+  if ((class_box->is_Con()
+      && (class_box_ary = class_box->bottom_type()->isa_aryptr()) != nullptr
+      && (class_box_aobj = class_box_ary->const_oop()->as_array()) != nullptr)
+  && (bottom->is_Con()
+      && (bottom_type = bottom->bottom_type()->isa_oopptr()) != nullptr
+      && (bottom_obj = bottom_type->const_oop()) != nullptr)) {
+
+    assert(class_box_aobj->length() == 1, "expected 1 class");
+    ciObject* recorded_type_obj = class_box_aobj->element_value(0).as_object();
+
+    if (recorded_type_obj->is_null_object()) {
+      // According to profile, never executed.
+      uncommon_trap_exact(Deoptimization::Reason_intrinsic,
+                          Deoptimization::Action_reinterpret);
+      return true;
+    }
+
+    ciType* bottom_type = bottom_obj->as_instance()->java_mirror_type();
+    ciType* recorded_type = recorded_type_obj->as_instance()->java_mirror_type();
+
+    if (C->log() != nullptr) {
+      C->log()->elem("observe source='profileReferenceType' recorded_type='%s'",
+                     recorded_type->name());
+    }
+
+    Node* obj = argument(0);
+    if (!recorded_type->equals(bottom_type)) { // is profile dead?
+      // 1. Type check with trap
+      // not really a receiver in this case, but that doesn't matter
+      const TypeKlassPtr* tklass = TypeKlassPtr::make(recorded_type->as_klass());
+      Node* recv_klass = load_object_klass(obj);
+      Node* want_klass = makecon(tklass);
+      Node* cmp = _gvn.transform(new CmpPNode(recv_klass, want_klass));
+      Node* bol = _gvn.transform(new BoolNode(cmp, BoolTest::eq));
+
+      { // Slow path: uncommon trap for never seen value and then reexecute
+        // MethodHandleImpl::profileReceiverType() which will kill the profile,
+        // and next time we get here in C2 compilation we just return the argument.
+        BuildCutout trap(this, bol, PROB_ALWAYS);
+        uncommon_trap_exact(Deoptimization::Reason_intrinsic,
+                            Deoptimization::Action_reinterpret);
+      }
+
+      const TypeOopPtr* recv_xtype = tklass->as_instance_type();
+      assert(recv_xtype->klass_is_exact(), "");
+
+      // Subsume downstream occurrences of receiver with a cast to
+      // recv_xtype, since now we know what the type will be.
+      Node* cast = new CheckCastPPNode(control(), obj, recv_xtype);
+      // Try to continue with the casted type
+      set_result(_gvn.transform(cast));
+    } else {
+      // Profiling already stooped in the Java impl.
+      // Nothing to be gained anymore. Let's just return the argument.
+      set_result(obj);
+    }
+    return true;
+  } else {
+    if (C->log() != nullptr) {
+      C->log()->elem("observe source='profileReferenceType' status='Continue profiling'");
+    }
     // Continue profiling.
     // Profile data isn't available at the moment. So, execute method's bytecode version.
     // Usually, when GWT LambdaForms are profiled it means that a stand-alone nmethod

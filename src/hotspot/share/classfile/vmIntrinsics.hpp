@@ -522,6 +522,9 @@ class methodHandle;
   do_intrinsic(_profileBoolean, java_lang_invoke_MethodHandleImpl, profileBoolean_name, profileBoolean_signature, F_S)  \
    do_name(     profileBoolean_name,                             "profileBoolean")                                      \
    do_signature(profileBoolean_signature,                        "(Z[I)Z")                                              \
+  do_intrinsic(_profileReferenceType, java_lang_invoke_MethodHandleImpl, profileReferenceType_name, profileReferenceType_signature, F_S)  \
+   do_name(     profileReferenceType_name,                       "profileReferenceType")                                      \
+   do_signature(profileReferenceType_signature,                  "(Ljava/lang/Object;[Ljava/lang/Class;Ljava/lang/Class;)Ljava/lang/Object;")\
   do_intrinsic(_isCompileConstant, java_lang_invoke_MethodHandleImpl, isCompileConstant_name, isCompileConstant_signature, F_S) \
    do_name(     isCompileConstant_name,                          "isCompileConstant")                                   \
    do_alias(    isCompileConstant_signature,                      object_boolean_signature)                             \

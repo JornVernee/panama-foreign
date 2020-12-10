@@ -341,6 +341,7 @@ class LambdaForm {
         FIELD("field"),
         GUARD("guard"),
         GUARD_WITH_CATCH("guardWithCatch"),
+        PROF_REF("profileReferenceType"),
         VARHANDLE_EXACT_INVOKER("VH.exactInvoker"),
         VARHANDLE_INVOKER("VH.invoker", "invoker"),
         VARHANDLE_LINKER("VH.invoke_MT", "invoke_MT");

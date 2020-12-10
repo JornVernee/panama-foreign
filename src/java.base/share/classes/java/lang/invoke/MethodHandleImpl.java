@@ -709,6 +709,25 @@ abstract class MethodHandleImpl {
         return result;
     }
 
+    // Intrinsified by C2. Counters are used during parsing to calculate branch frequencies.
+    @Hidden
+    @jdk.internal.vm.annotation.IntrinsicCandidate
+    static Object profileReferenceType(Object obj, Class<?>[] classBox, Class<?> bottom) {
+        Class<?> currentType = classBox[0];
+        Class<?> newType = obj.getClass();
+        if (currentType != bottom) {
+            // still profiling
+            if (currentType == null) {
+                // First one
+                classBox[0] = newType;
+            } else if (currentType != newType) {
+                // TODO find least upper bound?
+                classBox[0] = bottom; // broken
+            }
+        }
+        return obj;
+    }
+
     // Intrinsified by C2. Returns true if obj is a compile-time constant.
     @Hidden
     @jdk.internal.vm.annotation.IntrinsicCandidate
@@ -739,6 +758,21 @@ abstract class MethodHandleImpl {
             throw uncaughtException(ex);
         }
         assert(mh.type() == type);
+        return mh;
+    }
+
+    static MethodHandle makeProfileReferenceType(Class<?> identityType) {
+        MethodType type = MethodType.methodType(identityType, identityType);
+        MethodType basicType = type.basicType();
+        LambdaForm form = makeProfileReferenceTypeForm(basicType);
+        BoundMethodHandle mh;
+        try {
+            Class<?>[] classBox = new Class<?>[1];
+            mh = (BoundMethodHandle)
+                    BoundMethodHandle.speciesData_LL().factory().invokeBasic(type, form, classBox, identityType);
+        } catch (Throwable ex) {
+            throw uncaughtException(ex);
+        }
         return mh;
     }
 
@@ -944,6 +978,33 @@ abstract class MethodHandleImpl {
         lform = new LambdaForm(lambdaType.parameterCount(), names, /*forceInline=*/true, Kind.GUARD);
 
         return basicType.form().setCachedLambdaForm(MethodTypeForm.LF_GWT, lform);
+    }
+
+    static LambdaForm makeProfileReferenceTypeForm(MethodType basicType) {
+        assert basicType.parameterCount() == 1 && basicType.returnType() != null : "expected identity";
+        LambdaForm lform = basicType.form().cachedLambdaForm(MethodTypeForm.LF_PRT);
+        if (lform != null)  return lform;
+        final int THIS_MH      = 0;
+        final int ARG_BASE     = 1;  // start of incoming arguments
+        final int ARG_LIMIT    = ARG_BASE + basicType.parameterCount();
+        int nameCursor = ARG_LIMIT;
+        final int GET_CLASS_BOX = nameCursor++;
+        final int GET_BOTTOM_TYPE = nameCursor++;
+        final int PROFILE       = nameCursor++;
+
+        MethodType lambdaType = basicType.invokerType();
+        Name[] names = arguments(nameCursor - ARG_LIMIT, lambdaType);
+
+        BoundMethodHandle.SpeciesData data = BoundMethodHandle.speciesData_LL();
+        names[THIS_MH] = names[THIS_MH].withConstraint(data);
+        names[GET_CLASS_BOX] = new Name(data.getterFunction(0), names[THIS_MH]);
+        names[GET_BOTTOM_TYPE] = new Name(data.getterFunction(1), names[THIS_MH]);
+        names[PROFILE] = new Name(getFunction(NF_profileReferenceType),
+                names[ARG_BASE], names[GET_CLASS_BOX], names[GET_BOTTOM_TYPE]);
+
+        lform = new LambdaForm(lambdaType.parameterCount(), names, /*forceInline=*/true, Kind.PROF_REF);
+
+        return basicType.form().setCachedLambdaForm(MethodTypeForm.LF_PRT, lform);
     }
 
     /**
@@ -1686,7 +1747,8 @@ abstract class MethodHandleImpl {
             NF_tryFinally = 3,
             NF_loop = 4,
             NF_profileBoolean = 5,
-            NF_LIMIT = 6;
+            NF_profileReferenceType = 6,
+            NF_LIMIT = 7;
 
     private static final @Stable NamedFunction[] NFS = new NamedFunction[NF_LIMIT];
 
@@ -1700,29 +1762,24 @@ abstract class MethodHandleImpl {
 
     private static NamedFunction createFunction(byte func) {
         try {
-            switch (func) {
-                case NF_checkSpreadArgument:
-                    return new NamedFunction(MethodHandleImpl.class
-                            .getDeclaredMethod("checkSpreadArgument", Object.class, int.class));
-                case NF_guardWithCatch:
-                    return new NamedFunction(MethodHandleImpl.class
-                            .getDeclaredMethod("guardWithCatch", MethodHandle.class, Class.class,
-                                    MethodHandle.class, Object[].class));
-                case NF_tryFinally:
-                    return new NamedFunction(MethodHandleImpl.class
-                            .getDeclaredMethod("tryFinally", MethodHandle.class, MethodHandle.class, Object[].class));
-                case NF_loop:
-                    return new NamedFunction(MethodHandleImpl.class
-                            .getDeclaredMethod("loop", BasicType[].class, LoopClauses.class, Object[].class));
-                case NF_throwException:
-                    return new NamedFunction(MethodHandleImpl.class
-                            .getDeclaredMethod("throwException", Throwable.class));
-                case NF_profileBoolean:
-                    return new NamedFunction(MethodHandleImpl.class
-                            .getDeclaredMethod("profileBoolean", boolean.class, int[].class));
-                default:
-                    throw new InternalError("Undefined function: " + func);
-            }
+            return switch (func) {
+                case NF_checkSpreadArgument -> new NamedFunction(MethodHandleImpl.class
+                        .getDeclaredMethod("checkSpreadArgument", Object.class, int.class));
+                case NF_guardWithCatch -> new NamedFunction(MethodHandleImpl.class
+                        .getDeclaredMethod("guardWithCatch", MethodHandle.class, Class.class,
+                                MethodHandle.class, Object[].class));
+                case NF_tryFinally -> new NamedFunction(MethodHandleImpl.class
+                        .getDeclaredMethod("tryFinally", MethodHandle.class, MethodHandle.class, Object[].class));
+                case NF_loop -> new NamedFunction(MethodHandleImpl.class
+                        .getDeclaredMethod("loop", BasicType[].class, LoopClauses.class, Object[].class));
+                case NF_throwException -> new NamedFunction(MethodHandleImpl.class
+                        .getDeclaredMethod("throwException", Throwable.class));
+                case NF_profileBoolean -> new NamedFunction(MethodHandleImpl.class
+                        .getDeclaredMethod("profileBoolean", boolean.class, int[].class));
+                case NF_profileReferenceType -> new NamedFunction(MethodHandleImpl.class
+                        .getDeclaredMethod("profileReferenceType", Object.class, Class[].class, Class.class));
+                default -> throw new InternalError("Undefined function: " + func);
+            };
         } catch (ReflectiveOperationException ex) {
             throw newInternalError(ex);
         }
