@@ -6726,21 +6726,21 @@ bool LibraryCallKit::inline_profileReferenceType() {
       return true;
     }
 
-    ciType* bottom_type = bottom_obj->as_instance()->java_mirror_type();
     ciType* recorded_type = recorded_type_obj->as_instance()->java_mirror_type();
+    Node* obj = argument(0);
+    const Type* known_type = gvn().type(obj);
 
     if (C->log() != nullptr) {
-      C->log()->elem("observe source='profileReferenceType' recorded_type='%s'",
-                     recorded_type->name());
+      C->log()->elem("observe source='profileReferenceType' recorded_type='%s' known_type='%s'",
+                     recorded_type->name(), Type::str(known_type));
     }
 
-    Node* obj = argument(0);
-    if (!recorded_type->equals(bottom_type)) { // is profile dead?
+    const TypeKlassPtr* trecorded_type = TypeKlassPtr::make(recorded_type->as_klass());
+    if (trecorded_type->higher_equal(known_type)) { // Are we better than existing info?
       // 1. Type check with trap
       // not really a receiver in this case, but that doesn't matter
-      const TypeKlassPtr* tklass = TypeKlassPtr::make(recorded_type->as_klass());
       Node* recv_klass = load_object_klass(obj);
-      Node* want_klass = makecon(tklass);
+      Node* want_klass = makecon(trecorded_type);
       Node* cmp = _gvn.transform(new CmpPNode(recv_klass, want_klass));
       Node* bol = _gvn.transform(new BoolNode(cmp, BoolTest::eq));
 
@@ -6752,15 +6752,21 @@ bool LibraryCallKit::inline_profileReferenceType() {
                             Deoptimization::Action_reinterpret);
       }
 
-      const TypeOopPtr* recv_xtype = tklass->as_instance_type();
+      const TypeOopPtr* recv_xtype = trecorded_type->as_instance_type();
       assert(recv_xtype->klass_is_exact(), "");
 
       // Subsume downstream occurrences of receiver with a cast to
       // recv_xtype, since now we know what the type will be.
       Node* cast = new CheckCastPPNode(control(), obj, recv_xtype);
       // Try to continue with the casted type
+      if (C->log() != nullptr) {
+        C->log()->elem("observe source='profileReferenceType' status='Type improved'");
+      }
       set_result(_gvn.transform(cast));
     } else {
+      if (C->log() != nullptr) {
+        C->log()->elem("observe source='profileReferenceType' status='Could not improve type'");
+      }
       // Profiling already stooped in the Java impl.
       // Nothing to be gained anymore. Let's just return the argument.
       set_result(obj);
