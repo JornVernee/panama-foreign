@@ -2077,6 +2077,9 @@ const intx ObjectAlignmentInBytes = 8;
                                                                             \
   develop(bool, TracePanamaUpcallStubs, false,                              \
                 "Trace Panama upcall stub generation")                      \
+                                                                            \
+  develop(bool, TraceNativeInvokers, false,                                 \
+                "Trace Panama native invoker generation")                   \
 
 // end of RUNTIME_FLAGS
 
