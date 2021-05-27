@@ -37,6 +37,7 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.util.concurrent.TimeUnit;
 
@@ -134,7 +135,7 @@ public class Upcalls {
 
     static MemoryAddress makeCB(String name, MethodType mt, FunctionDescriptor fd) throws ReflectiveOperationException {
         return abi.upcallStub(
-            lookup().findStatic(Upcalls.class, name, mt),
+            MethodHandles.dropArguments(lookup().findStatic(Upcalls.class, name, mt), 0, ResourceScope.class),
             fd, ResourceScope.globalScope()
         ).address();
     }

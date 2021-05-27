@@ -24,6 +24,7 @@ package org.openjdk.bench.jdk.incubator.foreign;
 
 import jdk.incubator.foreign.FunctionDescriptor;
 import jdk.incubator.foreign.CLinker;
+import jdk.incubator.foreign.MemoryAddress;
 import jdk.incubator.foreign.SymbolLookup;
 import jdk.incubator.foreign.ResourceScope;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -42,7 +43,7 @@ import java.util.concurrent.TimeUnit;
 import static jdk.incubator.foreign.CLinker.C_DOUBLE;
 import static jdk.incubator.foreign.CLinker.C_INT;
 import static jdk.incubator.foreign.CLinker.C_LONG_LONG;
-import static jdk.incubator.foreign.CLinker.C_VA_LIST;
+import static jdk.incubator.foreign.CLinker.C_POINTER;
 import static jdk.incubator.foreign.CLinker.asVarArg;
 
 @BenchmarkMode(Mode.AverageTime)
@@ -67,8 +68,8 @@ public class VaList {
                 MethodType.methodType(void.class, int.class, int.class, double.class, long.class),
                 FunctionDescriptor.ofVoid(C_INT, asVarArg(C_INT), asVarArg(C_DOUBLE), asVarArg(C_LONG_LONG)));
         MH_vaList = linker.downcallHandle(lookup.lookup("vaList").get(),
-                MethodType.methodType(void.class, int.class, VaList.class),
-                FunctionDescriptor.ofVoid(C_INT, C_VA_LIST));
+                MethodType.methodType(void.class, int.class, MemoryAddress.class),
+                FunctionDescriptor.ofVoid(C_INT, C_POINTER));
     }
 
     @Benchmark
@@ -84,8 +85,7 @@ public class VaList {
                     b.vargFromInt(C_INT, 1)
                             .vargFromDouble(C_DOUBLE, 2D)
                             .vargFromLong(C_LONG_LONG, 3L), scope);
-            MH_vaList.invokeExact(3,
-                    vaList);
+            MH_vaList.invokeExact(3, vaList.address());
         }
     }
 }

@@ -90,13 +90,11 @@ public final class SysVx64Linker extends AbstractCLinker {
         Reflection.ensureNativeAccess(Reflection.getCallerClass());
         Objects.requireNonNull(type);
         Objects.requireNonNull(function);
-        MethodType llMt = SharedUtils.convertVaListCarriers(type, SysVVaList.CARRIER);
-        MethodHandle handle = CallArranger.arrangeDowncall(llMt, function);
+        MethodHandle handle = CallArranger.arrangeDowncall(type, function);
         if (!type.returnType().equals(MemorySegment.class)) {
             // not returning segment, just insert a throwing allocator
             handle = MethodHandles.insertArguments(handle, 1, SharedUtils.THROWING_ALLOCATOR);
         }
-        handle = SharedUtils.unboxVaLists(type, handle, MH_unboxVaList);
         return handle;
     }
 
@@ -107,8 +105,9 @@ public final class SysVx64Linker extends AbstractCLinker {
         Objects.requireNonNull(scope);
         Objects.requireNonNull(target);
         Objects.requireNonNull(function);
-        target = SharedUtils.boxVaLists(target, MH_boxVaList);
-        return UpcallStubs.upcallAddress(CallArranger.arrangeUpcall(target, target.type(), function), (ResourceScopeImpl) scope);
+        if (target.type().parameterType(0) != ResourceScope.class)
+            throw new IllegalArgumentException("Target handle must have ResourceScope as first parameter: " + target);
+        return UpcallStubs.upcallAddress(CallArranger.arrangeUpcall(target, target.type().dropParameterTypes(0, 1), function), (ResourceScopeImpl) scope);
     }
 
     public static VaList newVaListOfAddress(MemoryAddress ma, ResourceScope scope) {

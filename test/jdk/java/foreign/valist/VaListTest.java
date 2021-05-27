@@ -58,7 +58,6 @@ import static jdk.incubator.foreign.CLinker.C_FLOAT;
 import static jdk.incubator.foreign.CLinker.C_INT;
 import static jdk.incubator.foreign.CLinker.C_LONG_LONG;
 import static jdk.incubator.foreign.CLinker.C_POINTER;
-import static jdk.incubator.foreign.CLinker.C_VA_LIST;
 import static jdk.incubator.foreign.MemoryLayout.PathElement.groupElement;
 import static jdk.incubator.foreign.MemoryLayouts.JAVA_INT;
 import static jdk.internal.foreign.PlatformLayouts.*;
@@ -73,30 +72,52 @@ public class VaListTest extends NativeTestHelper {
 
     static SymbolLookup lookup = SymbolLookup.loaderLookup();
 
-    private static final MethodHandle MH_sumInts = link("sumInts",
-            MethodType.methodType(int.class, int.class, VaList.class),
-            FunctionDescriptor.of(C_INT, C_INT, C_VA_LIST));
-    private static final MethodHandle MH_sumDoubles = link("sumDoubles",
-            MethodType.methodType(double.class, int.class, VaList.class),
-            FunctionDescriptor.of(C_DOUBLE, C_INT, C_VA_LIST));
-    private static final MethodHandle MH_getInt = link("getInt",
-            MethodType.methodType(int.class, VaList.class),
-            FunctionDescriptor.of(C_INT, C_VA_LIST));
-    private static final MethodHandle MH_sumStruct = link("sumStruct",
-            MethodType.methodType(int.class, VaList.class),
-            FunctionDescriptor.of(C_INT, C_VA_LIST));
-    private static final MethodHandle MH_sumBigStruct = link("sumBigStruct",
-            MethodType.methodType(long.class, VaList.class),
-            FunctionDescriptor.of(C_LONG_LONG, C_VA_LIST));
-    private static final MethodHandle MH_sumHugeStruct = link("sumHugeStruct",
-            MethodType.methodType(long.class, VaList.class),
-            FunctionDescriptor.of(C_LONG_LONG, C_VA_LIST));
-    private static final MethodHandle MH_sumFloatStruct = link("sumFloatStruct",
-            MethodType.methodType(float.class, VaList.class),
-            FunctionDescriptor.of(C_FLOAT, C_VA_LIST));
-    private static final MethodHandle MH_sumStack = link("sumStack",
-            MethodType.methodType(void.class, MemoryAddress.class, MemoryAddress.class, VaList.class),
-            FunctionDescriptor.ofVoid(C_POINTER, C_POINTER, C_VA_LIST));
+    private static final MethodHandle MH_ADDR_TO_VALIST;
+    private static final MethodHandle MH_VaListConsumer_accept;
+    private static final MethodHandle MH_VaList_ofAddress;
+
+    static {
+        try {
+            MethodHandles.Lookup lookup = MethodHandles.lookup();
+            MH_ADDR_TO_VALIST = lookup.findVirtual(VaList.class, "address",
+                    MethodType.methodType(MemoryAddress.class));
+            MH_VaList_ofAddress = lookup.findStatic(VaList.class, "ofAddress",
+                    MethodType.methodType(VaList.class, MemoryAddress.class, ResourceScope.class));
+            MH_VaListConsumer_accept = lookup.findVirtual(VaListConsumer.class, "accept",
+                        MethodType.methodType(void.class, VaList.class));
+        } catch (ReflectiveOperationException e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
+
+    private static final MethodHandle MH_sumInts = adaptVaList(link("sumInts",
+            MethodType.methodType(int.class, int.class, MemoryAddress.class),
+            FunctionDescriptor.of(C_INT, C_INT, C_POINTER)));
+    private static final MethodHandle MH_sumDoubles = adaptVaList(link("sumDoubles",
+            MethodType.methodType(double.class, int.class, MemoryAddress.class),
+            FunctionDescriptor.of(C_DOUBLE, C_INT, C_POINTER)));
+    private static final MethodHandle MH_getInt = adaptVaList(link("getInt",
+            MethodType.methodType(int.class, MemoryAddress.class),
+            FunctionDescriptor.of(C_INT, C_POINTER)));
+    private static final MethodHandle MH_sumStruct = adaptVaList(link("sumStruct",
+            MethodType.methodType(int.class, MemoryAddress.class),
+            FunctionDescriptor.of(C_INT, C_POINTER)));
+    private static final MethodHandle MH_sumBigStruct = adaptVaList(link("sumBigStruct",
+            MethodType.methodType(long.class, MemoryAddress.class),
+            FunctionDescriptor.of(C_LONG_LONG, C_POINTER)));
+    private static final MethodHandle MH_sumHugeStruct = adaptVaList(link("sumHugeStruct",
+            MethodType.methodType(long.class, MemoryAddress.class),
+            FunctionDescriptor.of(C_LONG_LONG, C_POINTER)));
+    private static final MethodHandle MH_sumFloatStruct = adaptVaList(link("sumFloatStruct",
+            MethodType.methodType(float.class, MemoryAddress.class),
+            FunctionDescriptor.of(C_FLOAT, C_POINTER)));
+    private static final MethodHandle MH_sumStack = adaptVaList(link("sumStack",
+            MethodType.methodType(void.class, MemoryAddress.class, MemoryAddress.class, MemoryAddress.class),
+            FunctionDescriptor.ofVoid(C_POINTER, C_POINTER, C_POINTER)));
+
+    private static MethodHandle adaptVaList(MethodHandle target) {
+        return MethodHandles.filterArguments(target, target.type().parameterCount() - 1, MH_ADDR_TO_VALIST);
+    }
 
     private static MethodHandle link(String symbol, MethodType mt, FunctionDescriptor fd) {
         return abi.downcallHandle(lookup.lookup(symbol).get(), mt, fd);
@@ -509,7 +530,7 @@ public class VaListTest extends NativeTestHelper {
 
     @Test(dataProvider = "upcalls")
     public void testUpcall(MethodHandle target, MethodHandle callback) throws Throwable {
-        FunctionDescriptor desc = FunctionDescriptor.ofVoid(C_VA_LIST);
+        FunctionDescriptor desc = FunctionDescriptor.ofVoid(C_POINTER);
         try (ResourceScope scope = ResourceScope.newConfinedScope()) {
             MemoryAddress stub = abi.upcallStub(callback, desc, scope);
             target.invokeExact(stub.address());
@@ -770,12 +791,11 @@ public class VaListTest extends NativeTestHelper {
         void accept(VaList list);
 
         static MethodHandle mh(VaListConsumer instance) {
-            try {
-                return MethodHandles.lookup().findVirtual(VaListConsumer.class, "accept",
-                        MethodType.methodType(void.class, VaList.class)).bindTo(instance);
-            } catch (ReflectiveOperationException e) {
-                throw new InternalError(e);
-            }
+            MethodHandle handle = MH_VaListConsumer_accept.bindTo(instance); // (VaList)V
+            handle = MethodHandles.collectArguments(handle, 0, MH_VaList_ofAddress); // (MemoryAddress, ResourceScope)V
+            MethodType newType = MethodType.methodType(void.class, ResourceScope.class, MemoryAddress.class);
+            handle = MethodHandles.permuteArguments(handle, newType, 1, 0); // (ResourceScope, MemoryAddress)V
+            return handle;
         }
     }
 }

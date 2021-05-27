@@ -206,8 +206,8 @@ public class StdLibTest {
                 FunctionDescriptor.of(C_INT));
 
         final static MethodHandle vprintf = abi.downcallHandle(LOOKUP.lookup("vprintf").get(),
-                MethodType.methodType(int.class, MemoryAddress.class, VaList.class),
-                FunctionDescriptor.of(C_INT, C_POINTER, C_VA_LIST));
+                MethodType.methodType(int.class, MemoryAddress.class, MemoryAddress.class),
+                FunctionDescriptor.of(C_INT, C_POINTER, C_POINTER));
 
         final static MemoryAddress printfAddr = LOOKUP.lookup("printf").get();
 
@@ -314,7 +314,8 @@ public class StdLibTest {
                 MemorySegment nativeArr = allocator.allocateArray(C_INT, arr);
 
                 //call qsort
-                MemoryAddress qsortUpcallStub = abi.upcallStub(qsortCompar.bindTo(nativeArr), qsortComparFunction, scope);
+                MemoryAddress qsortUpcallStub = abi.upcallStub(
+                        MethodHandles.dropArguments(qsortCompar.bindTo(nativeArr), 0, ResourceScope.class), qsortComparFunction, scope);
 
                 qsort.invokeExact(nativeArr.address(), (long)arr.length, C_INT.byteSize(), qsortUpcallStub);
 
@@ -344,7 +345,7 @@ public class StdLibTest {
             try (ResourceScope scope = ResourceScope.newConfinedScope()) {
                 MemorySegment formatStr = toCString(format, scope);
                 VaList vaList = VaList.make(b -> args.forEach(a -> a.accept(b, scope)), scope);
-                return (int)vprintf.invokeExact(formatStr.address(), vaList);
+                return (int)vprintf.invokeExact(formatStr.address(), vaList.address());
             }
         }
 

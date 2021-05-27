@@ -72,7 +72,7 @@ public class TestUpcall extends CallGeneratorHelper {
 
     static {
         try {
-            DUMMY = MethodHandles.lookup().findStatic(TestUpcall.class, "dummy", MethodType.methodType(void.class));
+            DUMMY = MethodHandles.lookup().findStatic(TestUpcall.class, "dummy", MethodType.methodType(void.class, ResourceScope.class));
             PASS_AND_SAVE = MethodHandles.lookup().findStatic(TestUpcall.class, "passAndSave",
                     MethodType.methodType(Object.class, Object[].class, AtomicReference.class));
         } catch (Throwable ex) {
@@ -192,7 +192,7 @@ public class TestUpcall extends CallGeneratorHelper {
         FunctionDescriptor func = ret != Ret.VOID
                 ? FunctionDescriptor.of(firstlayout, paramLayouts)
                 : FunctionDescriptor.ofVoid(paramLayouts);
-        return abi.upcallStub(mh, func, scope);
+        return abi.upcallStub(MethodHandles.dropArguments(mh, 0, ResourceScope.class), func, scope);
     }
 
     static Object passAndSave(Object[] o, AtomicReference<Object[]> ref) {
@@ -208,7 +208,7 @@ public class TestUpcall extends CallGeneratorHelper {
         return o[0];
     }
 
-    static void dummy() {
+    static void dummy(ResourceScope scope) {
         //do nothing
     }
 }

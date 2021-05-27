@@ -46,6 +46,7 @@ import java.util.Objects;
 import java.util.stream.Stream;
 
 import static java.lang.invoke.MethodHandles.dropArguments;
+import static java.lang.invoke.MethodHandles.filterArguments;
 import static java.lang.invoke.MethodHandles.filterReturnValue;
 import static java.lang.invoke.MethodHandles.identity;
 import static java.lang.invoke.MethodHandles.insertArguments;
@@ -73,6 +74,7 @@ public class ProgrammableUpcallHandler {
 
     private static final MethodHandle MH_invokeMoves;
     private static final MethodHandle MH_invokeInterpBindings;
+    private static final MethodHandle MH_CONTEXT_SCOPE;
 
     static {
         try {
@@ -83,6 +85,7 @@ public class ProgrammableUpcallHandler {
             MH_invokeInterpBindings = lookup.findStatic(ProgrammableUpcallHandler.class, "invokeInterpBindings",
                     methodType(Object.class, Object[].class, MethodHandle.class, Map.class, Map.class,
                             CallingSequence.class, long.class));
+            MH_CONTEXT_SCOPE = lookup.findVirtual(Binding.Context.class, "scope", methodType(ResourceScope.class));
         } catch (ReflectiveOperationException e) {
             throw new InternalError(e);
         }
@@ -169,7 +172,8 @@ public class ProgrammableUpcallHandler {
 
         int argAllocatorPos = 0;
         int argInsertPos = 1;
-        specializedHandle = dropArguments(specializedHandle, argAllocatorPos, Binding.Context.class);
+        assert(target.type().parameterType(argAllocatorPos) == ResourceScope.class);
+        specializedHandle = filterArguments(specializedHandle, argAllocatorPos, MH_CONTEXT_SCOPE);
         for (int i = 0; i < highLevelType.parameterCount(); i++) {
             MethodHandle filter = identity(highLevelType.parameterType(i));
             int filterAllocatorPos = 0;
@@ -263,9 +267,10 @@ public class ProgrammableUpcallHandler {
                 : Binding.Context.ofScope();
         try (allocator) {
             /// Invoke interpreter, got array of high-level arguments back
-            Object[] args = new Object[callingSequence.methodType().parameterCount()];
+            Object[] args = new Object[callingSequence.methodType().parameterCount() + 1];
+            args[0] = allocator.scope();
             for (int i = 0; i < args.length; i++) {
-                args[i] = BindingInterpreter.box(callingSequence.argumentBindings(i),
+                args[i + 1] = BindingInterpreter.box(callingSequence.argumentBindings(i),
                         (storage, type) -> moves[argIndexMap.get(storage)], allocator);
             }
 

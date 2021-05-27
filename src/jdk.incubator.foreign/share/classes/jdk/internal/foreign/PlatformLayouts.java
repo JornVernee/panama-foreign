@@ -141,11 +141,6 @@ public class PlatformLayouts {
          * The {@code T*} native type.
          */
         public static final ValueLayout C_POINTER = ofPointer(LITTLE_ENDIAN, 64);
-
-        /**
-         * The {@code va_list} native type, as it is passed to a function.
-         */
-        public static final MemoryLayout C_VA_LIST = SysV.C_POINTER;
     }
 
     /**
@@ -201,11 +196,6 @@ public class PlatformLayouts {
          * The {@code T*} native type.
          */
         public static final ValueLayout C_POINTER = ofPointer(LITTLE_ENDIAN, 64);
-
-        /**
-         * The {@code va_list} native type, as it is passed to a function.
-         */
-        public static final MemoryLayout C_VA_LIST = Win64.C_POINTER;
 
         /**
          * Return a new memory layout which describes a variadic parameter to be passed to a function.
@@ -266,10 +256,5 @@ public class PlatformLayouts {
          * The {@code T*} native type.
          */
         public static final ValueLayout C_POINTER = ofPointer(LITTLE_ENDIAN, 64);
-
-        /**
-         * The {@code va_list} native type, as it is passed to a function.
-         */
-        public static final MemoryLayout C_VA_LIST = AArch64.C_POINTER;
     }
 }

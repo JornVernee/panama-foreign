@@ -201,7 +201,8 @@ public class SharedUtils {
         if (target.type().returnType() != MemorySegment.class)
             throw new IllegalArgumentException("Must return MemorySegment for IMR");
 
-        target = collectArguments(MH_BUFFER_COPY, 1, target); // (MemoryAddress, ...) MemoryAddress
+        target = collectArguments(MH_BUFFER_COPY, 1, target); // (MemoryAddress, ResourceScope, ...) MemoryAddress
+        target = swapArguments(target, 0, 1); // (ResourceScope, MemoryAddress, ...) MemoryAddress
 
         if (dropReturn) { // no handling for return value, need to drop it
             target = dropReturn(target);
@@ -478,34 +479,6 @@ public class SharedUtils {
             case SysV -> SysVx64Linker.emptyVaList();
             case AArch64 -> AArch64Linker.emptyVaList();
         };
-    }
-
-    public static MethodType convertVaListCarriers(MethodType mt, Class<?> carrier) {
-        Class<?>[] params = new Class<?>[mt.parameterCount()];
-        for (int i = 0; i < params.length; i++) {
-            Class<?> pType = mt.parameterType(i);
-            params[i] = ((pType == VaList.class) ? carrier : pType);
-        }
-        return methodType(mt.returnType(), params);
-    }
-
-    public static MethodHandle unboxVaLists(MethodType type, MethodHandle handle, MethodHandle unboxer) {
-        for (int i = 0; i < type.parameterCount(); i++) {
-            if (type.parameterType(i) == VaList.class) {
-               handle = filterArguments(handle, i + 1, unboxer); // +1 for leading address
-            }
-        }
-        return handle;
-    }
-
-    public static MethodHandle boxVaLists(MethodHandle handle, MethodHandle boxer) {
-        MethodType type = handle.type();
-        for (int i = 0; i < type.parameterCount(); i++) {
-            if (type.parameterType(i) == VaList.class) {
-               handle = filterArguments(handle, i, boxer);
-            }
-        }
-        return handle;
     }
 
     static void checkType(Class<?> actualType, Class<?> expectedType) {

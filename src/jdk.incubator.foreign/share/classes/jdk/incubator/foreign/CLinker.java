@@ -272,10 +272,6 @@ public interface CLinker {
      * The {@code T*} native type.
      */
     ValueLayout C_POINTER = pick(SysV.C_POINTER, Win64.C_POINTER, AArch64.C_POINTER);
-    /**
-     * The layout for the {@code va_list} C type
-     */
-    MemoryLayout C_VA_LIST = pick(SysV.C_VA_LIST, Win64.C_VA_LIST, AArch64.C_VA_LIST);
 
     /**
      * Returns a memory layout that is suitable to use as the layout for variadic arguments in a specialized
