@@ -267,10 +267,9 @@ public class ProgrammableUpcallHandler {
                 : Binding.Context.ofScope();
         try (allocator) {
             /// Invoke interpreter, got array of high-level arguments back
-            Object[] args = new Object[callingSequence.methodType().parameterCount() + 1];
-            args[0] = allocator.scope();
+            Object[] args = new Object[callingSequence.methodType().parameterCount()];
             for (int i = 0; i < args.length; i++) {
-                args[i + 1] = BindingInterpreter.box(callingSequence.argumentBindings(i),
+                args[i] = BindingInterpreter.box(callingSequence.argumentBindings(i),
                         (storage, type) -> moves[argIndexMap.get(storage)], allocator);
             }
 
@@ -280,7 +279,7 @@ public class ProgrammableUpcallHandler {
             }
 
             // invoke our target
-            Object o = leaf.invoke(args);
+            Object o = leaf.invoke(allocator.scope(), args);
 
             if (DEBUG) {
                 System.err.println("Java return:");
