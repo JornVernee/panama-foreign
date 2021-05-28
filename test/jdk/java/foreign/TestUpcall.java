@@ -28,7 +28,7 @@
  * @modules jdk.incubator.foreign/jdk.internal.foreign
  * @build NativeTestHelper CallGeneratorHelper TestUpcall
  *
- * @run testng/othervm
+ * @run testng/othervm/timeout=720
  *   --enable-native-access=ALL-UNNAMED
  *   TestUpcall
  */
@@ -192,7 +192,7 @@ public class TestUpcall extends CallGeneratorHelper {
         FunctionDescriptor func = ret != Ret.VOID
                 ? FunctionDescriptor.of(firstlayout, paramLayouts)
                 : FunctionDescriptor.ofVoid(paramLayouts);
-        return abi.upcallStub(MethodHandles.dropArguments(mh, 0, ResourceScope.class), func, scope);
+        return abi.upcallStub(mh, func, scope);
     }
 
     static Object passAndSave(Object[] o, AtomicReference<Object[]> ref) {

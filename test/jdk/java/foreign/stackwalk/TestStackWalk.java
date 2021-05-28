@@ -89,7 +89,7 @@ public class TestStackWalk {
 
     public static void main(String[] args) throws Throwable {
         try (ResourceScope scope = ResourceScope.newConfinedScope()) {
-            MemoryAddress stub = linker.upcallStub(MethodHandles.dropArguments(MH_m, 0, ResourceScope.class), FunctionDescriptor.ofVoid(), scope);
+            MemoryAddress stub = linker.upcallStub(MH_m, FunctionDescriptor.ofVoid(), scope);
             MemoryAddress stubAddress = stub.address();
             armed = false;
             for (int i = 0; i < 20_000; i++) {

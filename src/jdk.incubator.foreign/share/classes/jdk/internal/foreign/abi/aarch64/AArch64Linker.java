@@ -94,8 +94,8 @@ public final class AArch64Linker extends AbstractCLinker {
         Objects.requireNonNull(scope);
         Objects.requireNonNull(target);
         Objects.requireNonNull(function);
-        MethodType type = SharedUtils.getUpcallType(target);
-        return UpcallStubs.upcallAddress(CallArranger.arrangeUpcall(target, type, function), (ResourceScopeImpl) scope);
+        target = SharedUtils.adaptTarget(target);
+        return UpcallStubs.upcallAddress(CallArranger.arrangeUpcall(target, target.type().dropParameterTypes(0, 1), function), (ResourceScopeImpl) scope);
     }
 
     public static VaList newVaList(Consumer<VaList.Builder> actions, ResourceScope scope) {

@@ -315,7 +315,7 @@ public class StdLibTest {
 
                 //call qsort
                 MemoryAddress qsortUpcallStub = abi.upcallStub(
-                        MethodHandles.dropArguments(qsortCompar.bindTo(nativeArr), 0, ResourceScope.class), qsortComparFunction, scope);
+                        qsortCompar.bindTo(nativeArr), qsortComparFunction, scope);
 
                 qsort.invokeExact(nativeArr.address(), (long)arr.length, C_INT.byteSize(), qsortUpcallStub);
 

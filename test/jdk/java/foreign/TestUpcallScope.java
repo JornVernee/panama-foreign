@@ -55,6 +55,8 @@ import static jdk.incubator.foreign.CLinker.C_DOUBLE;
 import static jdk.incubator.foreign.CLinker.C_INT;
 import static jdk.incubator.foreign.CLinker.C_POINTER;
 import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertNotEquals;
+import static org.testng.Assert.assertNotSame;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.fail;
 
@@ -103,7 +105,7 @@ public class TestUpcallScope {
         MethodHandle target = methodHandle(capturedSegment::set);
         FunctionDescriptor upcallDesc = FunctionDescriptor.ofVoid(S_PDI_LAYOUT);
         try (ResourceScope scope = ResourceScope.newConfinedScope()) {
-            MemoryAddress upcallStub = LINKER.upcallStub(MethodHandles.dropArguments(target, 0, ResourceScope.class), upcallDesc, scope);
+            MemoryAddress upcallStub = LINKER.upcallStub(target, upcallDesc, scope);
             MemorySegment argSegment = MemorySegment.allocateNative(S_PDI_LAYOUT, scope);
             MH_do_struct_upcall.invokeExact(upcallStub.address(), argSegment);
         }
@@ -112,14 +114,15 @@ public class TestUpcallScope {
         assertFalse(captured.scope().isAlive());
     }
 
-    @Test(expectedExceptions = IllegalArgumentException.class,
-            expectedExceptionsMessageRegExp = ".*Target handle must have ResourceScope as first parameter.*")
+    @Test
     public void testUpcallHandleNoScopeParam() {
         try (ResourceScope scope = ResourceScope.newConfinedScope()) {
-            LINKER.upcallStub(
+            MemoryAddress ma = LINKER.upcallStub(
                 MethodHandles.empty(MethodType.methodType(void.class)),
                 FunctionDescriptor.ofVoid(),
-                scope); // should throw
+                scope);
+
+            assertNotEquals(ma, MemoryAddress.NULL);
         }
     }
 
