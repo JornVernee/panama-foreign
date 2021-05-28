@@ -413,6 +413,13 @@ public class SharedUtils {
         return specializedHandle;
     }
 
+    public static MethodType getUpcallType(MethodHandle target) {
+        MethodType type = target.type();
+        if (type.parameterCount() < 1 || type.parameterType(0) != ResourceScope.class)
+            throw new IllegalArgumentException("Target handle must have ResourceScope as first parameter: " + target);
+        return type.dropParameterTypes(0, 1);
+    }
+
     // lazy init MH_ALLOC and MH_FREE handles
     private static class AllocHolder {
 

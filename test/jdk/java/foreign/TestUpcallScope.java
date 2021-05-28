@@ -28,12 +28,12 @@
  *
  * @run testng/othervm/native
  *   --enable-native-access=ALL-UNNAMED
- *   -Djdk.internal.foreign.ProgrammableInvoker.USE_SPEC=false
- *   TestUpcallStructScope
+ *   -Djdk.internal.foreign.ProgrammableUpcallHandler.USE_SPEC=false
+ *   TestUpcallScope
  * @run testng/othervm/native
  *   --enable-native-access=ALL-UNNAMED
- *   -Djdk.internal.foreign.ProgrammableInvoker.USE_SPEC=true
- *   TestUpcallStructScope
+ *   -Djdk.internal.foreign.ProgrammableUpcallHandler.USE_SPEC=true
+ *   TestUpcallScope
  */
 
 import jdk.incubator.foreign.CLinker;
@@ -55,9 +55,12 @@ import static jdk.incubator.foreign.CLinker.C_DOUBLE;
 import static jdk.incubator.foreign.CLinker.C_INT;
 import static jdk.incubator.foreign.CLinker.C_POINTER;
 import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.fail;
 
-public class TestUpcallStructScope {
-    static final MethodHandle MH_do_upcall;
+public class TestUpcallScope {
+    static final MethodHandle MH_do_struct_upcall;
+    static final MethodHandle MH_do_void_upcall;
     static final CLinker LINKER = CLinker.getInstance();
     static final MethodHandle MH_Consumer_accept;
 
@@ -69,12 +72,17 @@ public class TestUpcallStructScope {
     );
 
     static {
-        System.loadLibrary("TestUpcallStructScope");
+        System.loadLibrary("TestUpcallScope");
         SymbolLookup lookup = SymbolLookup.loaderLookup();
-        MH_do_upcall = LINKER.downcallHandle(
-            lookup.lookup("do_upcall").get(),
+        MH_do_struct_upcall = LINKER.downcallHandle(
+            lookup.lookup("do_struct_upcall").get(),
             MethodType.methodType(void.class, MemoryAddress.class, MemorySegment.class),
             FunctionDescriptor.ofVoid(C_POINTER, S_PDI_LAYOUT)
+        );
+        MH_do_void_upcall = LINKER.downcallHandle(
+            lookup.lookup("do_void_upcall").get(),
+            MethodType.methodType(void.class, MemoryAddress.class),
+            FunctionDescriptor.ofVoid(C_POINTER)
         );
 
         try {
@@ -97,11 +105,41 @@ public class TestUpcallStructScope {
         try (ResourceScope scope = ResourceScope.newConfinedScope()) {
             MemoryAddress upcallStub = LINKER.upcallStub(MethodHandles.dropArguments(target, 0, ResourceScope.class), upcallDesc, scope);
             MemorySegment argSegment = MemorySegment.allocateNative(S_PDI_LAYOUT, scope);
-            MH_do_upcall.invokeExact(upcallStub.address(), argSegment);
+            MH_do_struct_upcall.invokeExact(upcallStub.address(), argSegment);
         }
 
         MemorySegment captured = capturedSegment.get();
         assertFalse(captured.scope().isAlive());
     }
 
+    @Test(expectedExceptions = IllegalArgumentException.class,
+            expectedExceptionsMessageRegExp = ".*Target handle must have ResourceScope as first parameter.*")
+    public void testUpcallHandleNoScopeParam() {
+        try (ResourceScope scope = ResourceScope.newConfinedScope()) {
+            LINKER.upcallStub(
+                MethodHandles.empty(MethodType.methodType(void.class)),
+                FunctionDescriptor.ofVoid(),
+                scope); // should throw
+        }
+    }
+
+    @Test
+    public void testUpcallScopeNotClosable() throws Throwable {
+        Consumer<ResourceScope> test = scope -> {
+            try {
+                scope.close(); // should throw
+                fail("Exception expected");
+            } catch (IllegalStateException ise) {
+                assertTrue(ise.getMessage().contains("Scope is acquired"));
+            }
+        };
+
+        MethodHandle target = MH_Consumer_accept.bindTo(test)
+                .asType(MethodType.methodType(void.class, ResourceScope.class));
+
+        try (ResourceScope scope = ResourceScope.newConfinedScope()) {
+            MemoryAddress stub = LINKER.upcallStub(target, FunctionDescriptor.ofVoid(), scope);
+            MH_do_void_upcall.invokeExact(stub);
+        }
+    }
 }

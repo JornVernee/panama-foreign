@@ -29,6 +29,11 @@
 
 struct S_PDI { void* p0; double p1; int p2; };
 
-EXPORT void do_upcall(void (*cb)(struct S_PDI), struct S_PDI a0) {
+EXPORT void do_struct_upcall(void (*cb)(struct S_PDI), struct S_PDI a0) {
     cb(a0);
 }
+
+EXPORT void do_void_upcall(void (*cb)(void)) {
+    cb();
+}
+

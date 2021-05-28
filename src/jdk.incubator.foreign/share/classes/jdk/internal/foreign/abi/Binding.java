@@ -238,10 +238,12 @@ public abstract class Binding {
     public static class Context implements AutoCloseable {
         private final SegmentAllocator allocator;
         private final ResourceScope scope;
+        private final ResourceScope.Handle handle; // make sure scope is not closed by accident
 
         private Context(SegmentAllocator allocator, ResourceScope scope) {
             this.allocator = allocator;
             this.scope = scope;
+            this.handle = scope != null ? scope.acquire() : null;
         }
 
         public SegmentAllocator allocator() {
@@ -254,6 +256,7 @@ public abstract class Binding {
 
         @Override
         public void close() {
+            scope().release(handle);
             scope().close();
         }
 

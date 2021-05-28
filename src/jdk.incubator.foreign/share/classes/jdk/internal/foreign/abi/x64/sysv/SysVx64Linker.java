@@ -105,9 +105,8 @@ public final class SysVx64Linker extends AbstractCLinker {
         Objects.requireNonNull(scope);
         Objects.requireNonNull(target);
         Objects.requireNonNull(function);
-        if (target.type().parameterType(0) != ResourceScope.class)
-            throw new IllegalArgumentException("Target handle must have ResourceScope as first parameter: " + target);
-        return UpcallStubs.upcallAddress(CallArranger.arrangeUpcall(target, target.type().dropParameterTypes(0, 1), function), (ResourceScopeImpl) scope);
+        MethodType type = SharedUtils.getUpcallType(target);
+        return UpcallStubs.upcallAddress(CallArranger.arrangeUpcall(target, type, function), (ResourceScopeImpl) scope);
     }
 
     public static VaList newVaListOfAddress(MemoryAddress ma, ResourceScope scope) {
