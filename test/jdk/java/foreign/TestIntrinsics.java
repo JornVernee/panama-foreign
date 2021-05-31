@@ -64,7 +64,7 @@ public class TestIntrinsics {
     }
 
     @Test(dataProvider = "tests")
-    public void testIntrinsics(RunnableX test) throws Throwable {
+    public void testIntrinsics(String name, RunnableX test) throws Throwable {
         for (int i = 0; i < 20_000; i++) {
             test.run();
         }
@@ -72,16 +72,16 @@ public class TestIntrinsics {
 
     @DataProvider
     public Object[][] tests() {
-        List<RunnableX> testsList = new ArrayList<>();
+        List<Object[]> testsList = new ArrayList<>();
 
         interface AddTest {
-            void add(MethodHandle target, Object expectedResult, Object... args);
+            void add(String name, MethodHandle target, Object expectedResult, Object... args);
         }
 
-        AddTest tests = (mh, expectedResult, args) -> testsList.add(() -> {
+        AddTest tests = (name, mh, expectedResult, args) -> testsList.add(new Object[] { name, (RunnableX) () -> {
             Object actual = mh.invokeWithArguments(args);
             assertEquals(actual, expectedResult);
-        });
+        }});
 
         interface AddIdentity {
             void add(String name, Class<?> carrier, MemoryLayout layout, Object arg);
@@ -92,17 +92,17 @@ public class TestIntrinsics {
             MethodType mt = methodType(carrier, carrier);
             FunctionDescriptor fd = FunctionDescriptor.of(layout, layout);
 
-            tests.add(abi.downcallHandle(ma, mt, fd), arg, arg);
-            tests.add(abi.downcallHandle(ma, mt, fd.withAttribute(TRIVIAL_ATTRIBUTE_NAME, true)), arg, arg);
-            tests.add(abi.downcallHandle(mt, fd), arg, ma, arg);
+            tests.add(name, abi.downcallHandle(ma, mt, fd), arg, arg);
+            tests.add(name + "_trivial", abi.downcallHandle(ma, mt, fd.withAttribute(TRIVIAL_ATTRIBUTE_NAME, true)), arg, arg);
+            tests.add(name + "_virtual", abi.downcallHandle(mt, fd), arg, ma, arg);
         };
 
         { // empty
             MemoryAddress ma = lookup.lookup("empty").get();
             MethodType mt = methodType(void.class);
             FunctionDescriptor fd = FunctionDescriptor.ofVoid();
-            tests.add(abi.downcallHandle(ma, mt, fd), null);
-            tests.add(abi.downcallHandle(ma, mt, fd.withAttribute(TRIVIAL_ATTRIBUTE_NAME, true)), null);
+            tests.add("empty", abi.downcallHandle(ma, mt, fd), null);
+            tests.add("empty_trivial", abi.downcallHandle(ma, mt, fd.withAttribute(TRIVIAL_ATTRIBUTE_NAME, true)), null);
         }
 
         addIdentity.add("identity_char",   byte.class,   C_CHAR,   (byte) 10);
@@ -117,26 +117,34 @@ public class TestIntrinsics {
             MethodType mt = methodType(int.class, int.class, double.class, int.class, float.class, long.class);
             FunctionDescriptor fd = FunctionDescriptor.of(C_INT, C_INT, asVarArg(C_DOUBLE),
                     asVarArg(C_INT), asVarArg(C_FLOAT), asVarArg(C_LONG_LONG));
-            tests.add(abi.downcallHandle(ma, mt, fd), 1, 1, 10D, 2, 3F, 4L);
-            tests.add(abi.downcallHandle(ma, mt, fd.withAttribute(TRIVIAL_ATTRIBUTE_NAME, true)), 1, 1, 10D, 2, 3F, 4L);
+            tests.add("varargs", abi.downcallHandle(ma, mt, fd), 1, 1, 10D, 2, 3F, 4L);
+            tests.add("varargs_trivial", abi.downcallHandle(ma, mt, fd.withAttribute(TRIVIAL_ATTRIBUTE_NAME, true)), 1, 1, 10D, 2, 3F, 4L);
         }
 
         { // high_arity
-            MethodType baseMT = methodType(void.class, int.class, double.class, long.class, float.class, byte.class,
-                    short.class, char.class);
-            FunctionDescriptor baseFD = FunctionDescriptor.ofVoid(C_INT, C_DOUBLE, C_LONG_LONG, C_FLOAT, C_CHAR,
-                    C_SHORT, C_SHORT);
-            Object[] args = {1, 10D, 2L, 3F, (byte) 0, (short) 13, 'a'};
-            for (int i = 0; i < args.length; i++) {
-                MemoryAddress ma = lookup.lookup("invoke_high_arity" + i).get();
-                MethodType mt = baseMT.changeReturnType(baseMT.parameterType(i));
-                FunctionDescriptor fd = baseFD.withReturnLayout(baseFD.argumentLayouts().get(i));
-                Object expected = args[i];
-                tests.add(abi.downcallHandle(ma, mt, fd), expected, args);
-                tests.add(abi.downcallHandle(ma, mt, fd.withAttribute(TRIVIAL_ATTRIBUTE_NAME, true)), expected, args);
+            MethodType baseMT = methodType(void.class,
+                    long.class, long.class, long.class, long.class, long.class, long.class, long.class, long.class,
+                    double.class, double.class, double.class, double.class, double.class, double.class, double.class, double.class,
+                    int.class, double.class, long.class, float.class, byte.class, short.class, char.class);
+            FunctionDescriptor baseFD = FunctionDescriptor.ofVoid(
+                    C_LONG_LONG, C_LONG_LONG, C_LONG_LONG, C_LONG_LONG, C_LONG_LONG, C_LONG_LONG, C_LONG_LONG, C_LONG_LONG,
+                    C_DOUBLE, C_DOUBLE, C_DOUBLE, C_DOUBLE, C_DOUBLE, C_DOUBLE, C_DOUBLE, C_DOUBLE,
+                    C_INT, C_DOUBLE, C_LONG_LONG, C_FLOAT, C_CHAR, C_SHORT, C_SHORT);
+            Object[] args = {
+                0, 0, 0, 0, 0, 0, 0, 0, // saturating registers
+                0D, 0D, 0D, 0D, 0D, 0D, 0D, 0D, // saturating registers
+                1, 10D, 2L, 3F, (byte) 0, (short) 13, 'a'};
+            for (int checkedArg = 16; checkedArg < args.length; checkedArg++) {
+                String name = "invoke_high_arity" + (checkedArg - 16);
+                MemoryAddress ma = lookup.lookup(name).get();
+                MethodType mt = baseMT.changeReturnType(baseMT.parameterType(checkedArg));
+                FunctionDescriptor fd = baseFD.withReturnLayout(baseFD.argumentLayouts().get(checkedArg));
+                Object expected = args[checkedArg];
+                tests.add(name, abi.downcallHandle(ma, mt, fd), expected, args);
+                tests.add(name + "_trivial", abi.downcallHandle(ma, mt, fd.withAttribute(TRIVIAL_ATTRIBUTE_NAME, true)), expected, args);
             }
         }
 
-        return testsList.stream().map(rx -> new Object[]{ rx }).toArray(Object[][]::new);
+        return testsList.toArray(Object[][]::new);
     }
 }
