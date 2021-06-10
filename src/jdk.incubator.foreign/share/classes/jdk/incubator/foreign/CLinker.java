@@ -296,7 +296,14 @@ public sealed interface CLinker permits AbstractCLinker {
     static MemorySegment toCString(String str, SegmentAllocator allocator) {
         Objects.requireNonNull(str);
         Objects.requireNonNull(allocator);
-        return toCString(str.getBytes(), allocator);
+        return toCString(addNullTerminator(str).getBytes(), allocator);
+    }
+
+    private static String addNullTerminator(String str) {
+        // Note that we do this before encoding the string as a byte[]
+        // so that the terminator will be an appropriate number of bytes
+        // for the used character encoding.
+        return str + '\0';
     }
 
     /**
@@ -336,7 +343,7 @@ public sealed interface CLinker permits AbstractCLinker {
         Objects.requireNonNull(str);
         Objects.requireNonNull(charset);
         Objects.requireNonNull(allocator);
-        return toCString(str.getBytes(charset), allocator);
+        return toCString(addNullTerminator(str).getBytes(charset), allocator);
     }
 
     /**
@@ -453,15 +460,9 @@ public sealed interface CLinker permits AbstractCLinker {
         return SharedUtils.toJavaStringInternal(addr, 0L, charset);
     }
 
-    private static void copy(MemorySegment addr, byte[] bytes) {
-        var heapSegment = MemorySegment.ofArray(bytes);
-        addr.copyFrom(heapSegment);
-        MemoryAccess.setByteAtOffset(addr, bytes.length, (byte)0);
-    }
-
     private static MemorySegment toCString(byte[] bytes, SegmentAllocator allocator) {
-        MemorySegment addr = allocator.allocate(bytes.length + 1, 1L);
-        copy(addr, bytes);
+        MemorySegment addr = allocator.allocate(bytes.length, 1L);
+        addr.copyFrom(MemorySegment.ofArray(bytes));
         return addr;
     }
 
