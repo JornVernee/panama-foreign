@@ -40,6 +40,7 @@ import java.lang.constant.Constable;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodType;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import java.util.function.Consumer;
 
@@ -296,14 +297,7 @@ public sealed interface CLinker permits AbstractCLinker {
     static MemorySegment toCString(String str, SegmentAllocator allocator) {
         Objects.requireNonNull(str);
         Objects.requireNonNull(allocator);
-        return toCString(addNullTerminator(str).getBytes(), allocator);
-    }
-
-    private static String addNullTerminator(String str) {
-        // Note that we do this before encoding the string as a byte[]
-        // so that the terminator will be an appropriate number of bytes
-        // for the used character encoding.
-        return str + '\0';
+        return toCString(str, Charset.defaultCharset(), allocator);
     }
 
     /**
@@ -343,7 +337,7 @@ public sealed interface CLinker permits AbstractCLinker {
         Objects.requireNonNull(str);
         Objects.requireNonNull(charset);
         Objects.requireNonNull(allocator);
-        return toCString(addNullTerminator(str).getBytes(charset), allocator);
+        return toCString(str.getBytes(charset), zeroBytes(charset), allocator);
     }
 
     /**
@@ -460,9 +454,31 @@ public sealed interface CLinker permits AbstractCLinker {
         return SharedUtils.toJavaStringInternal(addr, 0L, charset);
     }
 
-    private static MemorySegment toCString(byte[] bytes, SegmentAllocator allocator) {
-        MemorySegment addr = allocator.allocate(bytes.length, 1L);
-        addr.copyFrom(MemorySegment.ofArray(bytes));
+    private static int zeroBytes(Charset charset) {
+        if (charset == StandardCharsets.US_ASCII
+            || charset == StandardCharsets.ISO_8859_1
+            || charset == StandardCharsets.UTF_8) {
+            return 1;
+        }
+
+        return "\0".getBytes(charset).length;
+    }
+
+    private static void copy(MemorySegment addr, byte[] bytes, int zeroBytes) {
+        var heapSegment = MemorySegment.ofArray(bytes);
+        addr.copyFrom(heapSegment);
+        if (zeroBytes == 1) {
+            MemoryAccess.setByteAtOffset(addr, bytes.length, (byte) 0);
+        } else {
+            for (int i = 0; i < zeroBytes; i++) {
+                MemoryAccess.setByteAtOffset(addr, bytes.length + i, (byte) 0);
+            }
+        }
+    }
+
+    private static MemorySegment toCString(byte[] bytes, int zeroBytes, SegmentAllocator allocator) {
+        MemorySegment addr = allocator.allocate(bytes.length + zeroBytes, 1L);
+        copy(addr, bytes, zeroBytes);
         return addr;
     }
 
