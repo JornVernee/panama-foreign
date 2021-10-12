@@ -26,6 +26,7 @@
 
 #include "runtime/stubCodeGenerator.hpp"
 #include "prims/foreign_globals.hpp"
+#include "utilities/span.hpp"
 
 class RuntimeStub;
 class ProgrammableInvoker: AllStatic {
@@ -47,12 +48,11 @@ public:
   static void invoke_native(Stub stub, address buff, JavaThread* thread);
   static address generate_adapter(jobject abi, jobject layout);
 
-  static RuntimeStub* make_native_invoker(BasicType*,
-                                          int num_args,
+  static RuntimeStub* make_native_invoker(const Span<BasicType> basic_type,
                                           BasicType ret_bt,
                                           int shadow_space_bytes,
-                                          const GrowableArray<VMReg>& input_registers,
-                                          const GrowableArray<VMReg>& output_registers);
+                                          const Span<VMReg> input_registers,
+                                          const Span<VMReg> output_registers);
   static bool supports_native_invoker();
 };
 

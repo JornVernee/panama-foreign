@@ -95,27 +95,24 @@ const CallRegs ForeignGlobals::parse_call_regs_impl(jobject jconv) const {
   objArrayOop arg_regs_oop = oop_cast<objArrayOop>(conv_oop->obj_field(CallConvOffsets.arg_regs_offset));
   objArrayOop ret_regs_oop = oop_cast<objArrayOop>(conv_oop->obj_field(CallConvOffsets.ret_regs_offset));
 
-  CallRegs result;
-  result._args_length = arg_regs_oop->length();
-  result._arg_regs = NEW_RESOURCE_ARRAY(VMReg, result._args_length);
+  Span<VMReg> arg_regs = NEW_RESOURCE_ARRAY_S(VMReg, arg_regs_oop->length());
+  Span<VMReg> ret_regs = NEW_RESOURCE_ARRAY_S(VMReg, ret_regs_oop->length());
 
-  result._rets_length = ret_regs_oop->length();
-  result._ret_regs = NEW_RESOURCE_ARRAY(VMReg, result._rets_length);
-
-  for (int i = 0; i < result._args_length; i++) {
+  for (int i = 0; i < arg_regs.element_count(); i++) {
     oop storage = arg_regs_oop->obj_at(i);
     jint index = storage->int_field(VMS.index_offset);
     jint type = storage->int_field(VMS.type_offset);
-    result._arg_regs[i] = vmstorage_to_vmreg(type, index);
+    arg_regs[i] = vmstorage_to_vmreg(type, index);
   }
 
-  for (int i = 0; i < result._rets_length; i++) {
+  for (int i = 0; i < ret_regs.element_count(); i++) {
     oop storage = ret_regs_oop->obj_at(i);
     jint index = storage->int_field(VMS.index_offset);
     jint type = storage->int_field(VMS.type_offset);
-    result._ret_regs[i] = vmstorage_to_vmreg(type, index);
+    ret_regs[i] = vmstorage_to_vmreg(type, index);
   }
 
+  CallRegs result(arg_regs, ret_regs);
   return result;
 }
 

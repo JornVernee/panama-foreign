@@ -36,6 +36,7 @@
 #include "prims/universalNativeInvoker.hpp"
 #include "runtime/jniHandles.hpp"
 #include "runtime/jniHandles.inline.hpp"
+#include "utilities/span.hpp"
 
 JNI_LEAF(jlong, NEP_vmStorageToVMReg(JNIEnv* env, jclass _unused, jint type, jint index))
   return ForeignGlobals::vmstorage_to_vmreg(type, index)->value();
@@ -58,13 +59,13 @@ JNI_ENTRY(jlong, NEP_makeInvoker(JNIEnv* env, jclass _unused, jobject method_typ
   int pcount = java_lang_invoke_MethodType::ptype_count(type);
   int pslots = java_lang_invoke_MethodType::ptype_slot_count(type);
   // contains address:
-  BasicType* basic_type = NEW_RESOURCE_ARRAY(BasicType, pslots);
+  Span<BasicType> basic_type = NEW_RESOURCE_ARRAY_S(BasicType, pslots);
   // address
   basic_type[0] = T_LONG;
   basic_type[1] = T_VOID;
 
   // does not contain entry for address:
-  GrowableArray<VMReg> input_regs(pslots);
+  Span<VMReg> input_regs = NEW_RESOURCE_ARRAY_S(VMReg, pslots);
 
   int num_args = 2;
   for (int i = 1; i < pcount; i++) { // skip addr
@@ -72,17 +73,18 @@ JNI_ENTRY(jlong, NEP_makeInvoker(JNIEnv* env, jclass _unused, jobject method_typ
     assert(java_lang_Class::is_primitive(type_oop), "Only primitives expected");
     BasicType bt = java_lang_Class::primitive_type(type_oop);
     basic_type[num_args] = bt;
-    input_regs.push(VMRegImpl::as_VMReg(arg_moves_oop->long_at(i - 1))); // address missing in moves
+    input_regs[num_args] = VMRegImpl::as_VMReg(arg_moves_oop->long_at(i - 1)); // address missing in moves
     num_args++;
 
     if (bt == BasicType::T_DOUBLE || bt == BasicType::T_LONG) {
       basic_type[num_args] = T_VOID;
-      input_regs.push(VMRegImpl::Bad()); // half of double/long
+      input_regs[num_args] = VMRegImpl::Bad(); // half of double/long
       num_args++;
     }
   }
 
-  GrowableArray<VMReg> output_regs(pslots);
+  int rslots = java_lang_invoke_MethodType::rtype_slot_count(type);
+  Span<VMReg> output_regs = NEW_RESOURCE_ARRAY_S(VMReg, rslots);
 
   jint outs = ret_moves_oop->length();
   assert(outs <= 1, "No multi-reg returns");
@@ -91,9 +93,9 @@ JNI_ENTRY(jlong, NEP_makeInvoker(JNIEnv* env, jclass _unused, jobject method_typ
     oop type_oop = java_lang_invoke_MethodType::rtype(type);
     ret_bt = java_lang_Class::primitive_type(type_oop);
 
-    output_regs.push(VMRegImpl::as_VMReg(ret_moves_oop->long_at(0)));
+    output_regs[0] = VMRegImpl::as_VMReg(ret_moves_oop->long_at(0));
     if (ret_bt == BasicType::T_DOUBLE || ret_bt == BasicType::T_LONG) {
-      output_regs.push(VMRegImpl::Bad()); // half of double/long
+      output_regs[1] = VMRegImpl::Bad(); // half of double/long
     }
   }
 
@@ -104,20 +106,18 @@ JNI_ENTRY(jlong, NEP_makeInvoker(JNIEnv* env, jclass _unused, jobject method_typ
     LogStream ls(lt);
     ls.print_cr("Generating native invoker {");
     ls.print("BasicType { ");
-    for (int i = 0; i < num_args; i++) {
-      ls.print("%s, ", null_safe_string(type2name(basic_type[i])));
+    for (BasicType bt : basic_type) {
+      ls.print("%s, ", null_safe_string(type2name(bt)));
     }
     ls.print_cr("}");
     ls.print_cr("shadow_space_bytes = %d", shadow_space_bytes);
     ls.print("input_registers { ");
-    for (int i = 0; i < input_regs.length(); i++) {
-      VMReg reg = input_regs.at(i);
+    for (VMReg reg : input_regs) {
       ls.print("%s (" INTPTR_FORMAT "), ", reg->name(), reg->value());
     }
     ls.print_cr("}");
       ls.print("output_registers { ");
-    for (int i = 0; i < output_regs.length(); i++) {
-      VMReg reg = output_regs.at(i);
+    for (VMReg reg : output_regs) {
       ls.print("%s (" INTPTR_FORMAT "), ", reg->name(), reg->value());
     }
     ls.print_cr("}");
@@ -126,7 +126,7 @@ JNI_ENTRY(jlong, NEP_makeInvoker(JNIEnv* env, jclass _unused, jobject method_typ
 #endif
 
   return (jlong) ProgrammableInvoker::make_native_invoker(
-    basic_type, num_args, ret_bt, shadow_space_bytes, input_regs, output_regs)->code_begin();
+    basic_type, ret_bt, shadow_space_bytes, input_regs, output_regs)->code_begin();
 JNI_END
 
 #define CC (char*)  /*cast a literal from (const char*)*/

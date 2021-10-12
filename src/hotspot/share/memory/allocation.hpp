@@ -28,6 +28,7 @@
 #include "memory/allStatic.hpp"
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/macros.hpp"
+#include "utilities/span.hpp"
 
 #include <new>
 
@@ -469,6 +470,9 @@ protected:
 #define REALLOC_RESOURCE_ARRAY_RETURN_NULL(type, old, old_size, new_size)\
   (type*) resource_reallocate_bytes((char*)(old), (old_size) * sizeof(type),\
                                     (new_size) * sizeof(type), AllocFailStrategy::RETURN_NULL)
+
+#define NEW_RESOURCE_ARRAY_S(type, size)\
+  Span<type>{NEW_RESOURCE_ARRAY(type, size), size}
 
 #define FREE_RESOURCE_ARRAY(type, old, size)\
   resource_free_bytes((char*)(old), (size) * sizeof(type))

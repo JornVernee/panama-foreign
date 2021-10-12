@@ -100,9 +100,9 @@ ForeignGlobals::ForeignGlobals() {
   CallConvOffsets.ret_regs_offset = field_offset(k_CC, "retRegs", symVMSArray);
 }
 
-int CallRegs::calling_convention(BasicType* sig_bt, VMRegPair *regs, int num_args) const {
+int CallRegs::calling_convention(const Span<BasicType> sig_bt, VMRegPair *regs) const {
   int src_pos = 0;
-  for (int i = 0; i < num_args; i++) {
+  for (int i = 0; i < sig_bt.element_count(); i++) {
     switch (sig_bt[i]) {
       case T_BOOLEAN:
       case T_CHAR:
@@ -110,13 +110,11 @@ int CallRegs::calling_convention(BasicType* sig_bt, VMRegPair *regs, int num_arg
       case T_SHORT:
       case T_INT:
       case T_FLOAT:
-        assert(src_pos < _args_length, "oob");
         regs[i].set1(_arg_regs[src_pos++]);
         break;
       case T_LONG:
       case T_DOUBLE:
-        assert((i + 1) < num_args && sig_bt[i + 1] == T_VOID, "expecting half");
-        assert(src_pos < _args_length, "oob");
+        assert(sig_bt[i + 1] == T_VOID, "expecting half");
         regs[i].set2(_arg_regs[src_pos++]);
         break;
       case T_VOID: // Halves of longs and doubles
@@ -131,18 +129,17 @@ int CallRegs::calling_convention(BasicType* sig_bt, VMRegPair *regs, int num_arg
   return 0; // assumed unused
 }
 
-int RegSpiller::compute_spill_area(const VMReg* regs, int num_regs) {
+int RegSpiller::compute_spill_area(const Span<VMReg> regs) {
   int result_size = 0;
-  for (int i = 0; i < num_regs; i++) {
-    result_size += pd_reg_size(regs[i]);
+  for (const VMReg reg : regs) {
+    result_size += pd_reg_size(reg);
   }
   return result_size;
 }
 
 void RegSpiller::generate(MacroAssembler* masm, int rsp_offset, bool spill) const {
   int offset = rsp_offset;
-  for (int i = 0; i < _num_regs; i++) {
-    VMReg reg = _regs[i];
+  for (const VMReg reg : _regs) {
     if (spill) {
       pd_store_reg(masm, offset, reg);
     } else {
@@ -174,13 +171,13 @@ void ArgumentShuffle::print_on(outputStream* os) const {
   os->print_cr("}");
 }
 
-int DowncallNativeCallConv::calling_convention(BasicType* sig_bt, VMRegPair* out_regs, int num_args) const {
+int DowncallNativeCallConv::calling_convention(const Span<BasicType> sig_bt, VMRegPair* out_regs) const {
   out_regs[0].set2(_input_addr_reg); // address
   out_regs[1].set_bad(); // upper half
 
   int src_pos = 0;
   int stk_slots = 0;
-  for (int i = 2; i < num_args; i++) { // skip address (2)
+  for (int i = 2; i < sig_bt.element_count(); i++) { // skip address (2)
     switch (sig_bt[i]) {
       case T_BOOLEAN:
       case T_CHAR:
@@ -188,7 +185,7 @@ int DowncallNativeCallConv::calling_convention(BasicType* sig_bt, VMRegPair* out
       case T_SHORT:
       case T_INT:
       case T_FLOAT: {
-        VMReg reg = _input_regs.at(src_pos++);
+        VMReg reg = _input_regs[src_pos++];
         out_regs[i].set1(reg);
         if (reg->is_stack())
           stk_slots += 2;
@@ -196,8 +193,8 @@ int DowncallNativeCallConv::calling_convention(BasicType* sig_bt, VMRegPair* out
       }
       case T_LONG:
       case T_DOUBLE: {
-        assert((i + 1) < num_args && sig_bt[i + 1] == T_VOID, "expecting half");
-        VMReg reg = _input_regs.at(src_pos);
+        assert(sig_bt[i + 1] == T_VOID, "expecting half");
+        VMReg reg = _input_regs[src_pos];
         out_regs[i].set2(reg);
         src_pos += 2; // skip BAD as well
         if (reg->is_stack())
@@ -378,19 +375,17 @@ class ForeignCMO: public StackObj {
 };
 
 ArgumentShuffle::ArgumentShuffle(
-    BasicType* in_sig_bt,
-    int num_in_args,
-    BasicType* out_sig_bt,
-    int num_out_args,
+    const Span<BasicType> in_sig_bt,
+    const Span<BasicType> out_sig_bt,
     const CallConvClosure* input_conv,
     const CallConvClosure* output_conv,
     VMReg shuffle_temp) {
 
-  VMRegPair* in_regs = NEW_RESOURCE_ARRAY(VMRegPair, num_in_args);
-  input_conv->calling_convention(in_sig_bt, in_regs, num_in_args);
+  VMRegPair* in_regs = NEW_RESOURCE_ARRAY(VMRegPair, in_sig_bt.element_count());
+  input_conv->calling_convention(in_sig_bt, in_regs);
 
-  VMRegPair* out_regs = NEW_RESOURCE_ARRAY(VMRegPair, num_out_args);
-  _out_arg_stack_slots = output_conv->calling_convention(out_sig_bt, out_regs, num_out_args);
+  VMRegPair* out_regs = NEW_RESOURCE_ARRAY(VMRegPair, out_sig_bt.element_count());
+  _out_arg_stack_slots = output_conv->calling_convention(out_sig_bt, out_regs);
 
   VMRegPair tmp_vmreg;
   tmp_vmreg.set2(shuffle_temp);
@@ -401,8 +396,8 @@ ArgumentShuffle::ArgumentShuffle(
   // so we shouldn't have to worry about the upper half any ways.
   // This should work fine on 32-bit as well, since we would only be
   // moving 32-bit sized values (i.e. low-level MH shouldn't take any double/long).
-  ForeignCMO order(num_in_args, in_regs,
-                   num_out_args, out_regs,
-                   in_sig_bt, tmp_vmreg);
+  ForeignCMO order(in_sig_bt.element_count(), in_regs,
+                   out_sig_bt.element_count(), out_regs,
+                   in_sig_bt.ptr(), tmp_vmreg);
   _moves = order.moves();
 }

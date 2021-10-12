@@ -285,7 +285,7 @@ address ProgrammableUpcallHandler::generate_optimized_upcall_stub(jobject receiv
   ResourceMark rm;
   const ABIDescriptor abi = ForeignGlobals::parse_abi_descriptor(jabi);
   const CallRegs call_regs = ForeignGlobals::parse_call_regs(jconv);
-  assert(call_regs._rets_length <= 1, "no multi reg returns");
+  assert(call_regs._ret_regs.element_count() <= 1, "no multi reg returns");
   CodeBuffer buffer("upcall_stub_linkToNative", /* code_size = */ 2048, /* locs_size = */ 1024);
 
   int register_size = sizeof(uintptr_t);
@@ -296,7 +296,7 @@ address ProgrammableUpcallHandler::generate_optimized_upcall_stub(jobject receiv
   const int total_out_args = entry->size_of_parameters();
   assert(total_out_args > 0, "receiver arg");
 
-  BasicType* out_sig_bt = NEW_RESOURCE_ARRAY(BasicType, total_out_args);
+  Span<BasicType> out_sig_bt = NEW_RESOURCE_ARRAY_S(BasicType, total_out_args);
   BasicType ret_type;
   {
     int i = 0;
@@ -310,11 +310,10 @@ address ProgrammableUpcallHandler::generate_optimized_upcall_stub(jobject receiv
     ret_type = ss.type();
   }
   // skip receiver
-  BasicType* in_sig_bt = out_sig_bt + 1;
-  int total_in_args = total_out_args - 1;
+  Span<BasicType> in_sig_bt = out_sig_bt.slice(1, out_sig_bt.element_count() - 1);
 
   JavaCallConv out_conv;
-  ArgumentShuffle arg_shuffle(in_sig_bt, total_in_args, out_sig_bt, total_out_args, &call_regs, &out_conv, rbx->as_VMReg());
+  ArgumentShuffle arg_shuffle(in_sig_bt, out_sig_bt, &call_regs, &out_conv, rbx->as_VMReg());
   int stack_slots = SharedRuntime::out_preserve_stack_slots() + arg_shuffle.out_arg_stack_slots();
   int out_arg_area = align_up(stack_slots * VMRegImpl::stack_slot_size, StackAlignmentInBytes);
 
@@ -334,8 +333,8 @@ address ProgrammableUpcallHandler::generate_optimized_upcall_stub(jobject receiv
   }
 
   int reg_save_area_size = compute_reg_save_area_size(abi);
-  RegSpiller arg_spilller(call_regs._arg_regs, call_regs._args_length);
-  RegSpiller result_spiller(call_regs._ret_regs, call_regs._rets_length);
+  RegSpiller arg_spilller(call_regs._arg_regs);
+  RegSpiller result_spiller(call_regs._ret_regs);
   // To spill receiver during deopt
   int deopt_spill_size = 1 * BytesPerWord;
 
@@ -434,7 +433,7 @@ address ProgrammableUpcallHandler::generate_optimized_upcall_stub(jobject receiv
 
   // return value shuffle
 #ifdef ASSERT
-  if (call_regs._rets_length == 1) { // 0 or 1
+  if (call_regs._ret_regs.element_count() == 1) { // 0 or 1
     VMReg j_expected_result_reg;
     switch (ret_type) {
       case T_BOOLEAN:

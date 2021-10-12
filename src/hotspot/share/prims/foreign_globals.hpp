@@ -34,17 +34,17 @@
 
 class CallConvClosure {
 public:
-  virtual int calling_convention(BasicType* sig_bt, VMRegPair* regs, int num_args) const = 0;
+  virtual int calling_convention(const Span<BasicType> sig_bt, VMRegPair* regs) const = 0;
 };
 
 struct CallRegs : public CallConvClosure {
-  VMReg* _arg_regs;
-  int _args_length;
+  const Span<VMReg> _arg_regs;
+  const Span<VMReg> _ret_regs;
 
-  VMReg* _ret_regs;
-  int _rets_length;
+  CallRegs(const Span<VMReg> arg_regs, const Span<VMReg> ret_regs)
+      : _arg_regs(arg_regs), _ret_regs(ret_regs) {}
 
-  int calling_convention(BasicType* sig_bt, VMRegPair* regs, int num_args) const override;
+  int calling_convention(const Span<BasicType> sig_bt, VMRegPair* regs) const override;
 };
 
 class ForeignGlobals {
@@ -98,32 +98,29 @@ public:
 
 class JavaCallConv : public CallConvClosure {
 public:
-  int calling_convention(BasicType* sig_bt, VMRegPair* regs, int num_args) const override {
-    return SharedRuntime::java_calling_convention(sig_bt, regs, num_args);
+  int calling_convention(const Span<BasicType> sig_bt, VMRegPair* regs) const override {
+    return SharedRuntime::java_calling_convention(sig_bt.ptr(), regs, sig_bt.element_count());
   }
 };
 
 class DowncallNativeCallConv : public CallConvClosure {
-  const GrowableArray<VMReg>& _input_regs;
+  const Span<VMReg> _input_regs;
   VMReg _input_addr_reg;
 public:
-  DowncallNativeCallConv(const GrowableArray<VMReg>& input_regs, VMReg input_addr_reg)
+  DowncallNativeCallConv(const Span<VMReg> input_regs, VMReg input_addr_reg)
    : _input_regs(input_regs),
    _input_addr_reg(input_addr_reg) {}
 
-  int calling_convention(BasicType* sig_bt, VMRegPair* out_regs, int num_args) const override;
+  int calling_convention(const Span<BasicType> sig_bt, VMRegPair* out_regs) const override;
 };
 
 class RegSpiller {
-  const VMReg* _regs;
-  int _num_regs;
+  const Span<VMReg> _regs;
   int _spill_size_bytes;
 public:
-  RegSpiller(const VMReg* regs, int num_regs) :
-    _regs(regs), _num_regs(num_regs),
-    _spill_size_bytes(compute_spill_area(regs, num_regs)) {
-  }
-  RegSpiller(const GrowableArray<VMReg>& regs) : RegSpiller(regs.data(), regs.length()) {
+  RegSpiller(const Span<VMReg> regs) :
+    _regs(regs),
+    _spill_size_bytes(compute_spill_area(regs)) {
   }
 
   int spill_size_bytes() const { return _spill_size_bytes; }
@@ -131,7 +128,7 @@ public:
   void generate_fill(MacroAssembler* masm, int rsp_offset) const { return generate(masm, rsp_offset, false); }
 
 private:
-  static int compute_spill_area(const VMReg* regs, int num_regs);
+  static int compute_spill_area(const Span<VMReg> regs);
   void generate(MacroAssembler* masm, int rsp_offset, bool is_spill) const;
 
   static int pd_reg_size(VMReg reg);
@@ -151,9 +148,10 @@ private:
   int _out_arg_stack_slots;
 public:
   ArgumentShuffle(
-    BasicType* in_sig_bt, int num_in_args,
-    BasicType* out_sig_bt, int num_out_args,
-    const CallConvClosure* input_conv, const CallConvClosure* output_conv,
+    const Span<BasicType> in_sig_bt,
+    const Span<BasicType> out_sig_bt,
+    const CallConvClosure* input_conv,
+    const CallConvClosure* output_conv,
     VMReg shuffle_temp);
 
   int out_arg_stack_slots() const { return _out_arg_stack_slots; }

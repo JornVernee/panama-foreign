@@ -133,28 +133,25 @@ address ProgrammableInvoker::generate_adapter(jobject jabi, jobject jlayout) {
 // ---------------------------------------------------------------
 
 class NativeInvokerGenerator : public StubCodeGenerator {
-  BasicType* _signature;
-  int _num_args;
+  const Span<BasicType> _signature;
   BasicType _ret_bt;
   int _shadow_space_bytes;
 
-  const GrowableArray<VMReg>& _input_registers;
-  const GrowableArray<VMReg>& _output_registers;
+  const Span<VMReg> _input_registers;
+  const Span<VMReg> _output_registers;
 
   int _frame_complete;
   int _framesize;
   OopMapSet* _oop_maps;
 public:
   NativeInvokerGenerator(CodeBuffer* buffer,
-                         BasicType* signature,
-                         int num_args,
+                         const Span<BasicType> signature,
                          BasicType ret_bt,
                          int shadow_space_bytes,
-                         const GrowableArray<VMReg>& input_registers,
-                         const GrowableArray<VMReg>& output_registers)
+                         const Span<VMReg> input_registers,
+                         const Span<VMReg> output_registers)
    : StubCodeGenerator(buffer, PrintMethodHandleStubs),
      _signature(signature),
-     _num_args(num_args),
      _ret_bt(ret_bt),
      _shadow_space_bytes(shadow_space_bytes),
      _input_registers(input_registers),
@@ -190,15 +187,14 @@ private:
 
 static const int native_invoker_code_size = 1024;
 
-RuntimeStub* ProgrammableInvoker::make_native_invoker(BasicType* signature,
-                                                      int num_args,
+RuntimeStub* ProgrammableInvoker::make_native_invoker(const Span<BasicType> signature,
                                                       BasicType ret_bt,
                                                       int shadow_space_bytes,
-                                                      const GrowableArray<VMReg>& input_registers,
-                                                      const GrowableArray<VMReg>& output_registers) {
+                                                      const Span<VMReg> input_registers,
+                                                      const Span<VMReg> output_registers) {
   int locs_size  = 64;
   CodeBuffer code("nep_invoker_blob", native_invoker_code_size, locs_size);
-  NativeInvokerGenerator g(&code, signature, num_args, ret_bt, shadow_space_bytes, input_registers, output_registers);
+  NativeInvokerGenerator g(&code, signature, ret_bt, shadow_space_bytes, input_registers, output_registers);
   g.generate();
   code.log_section_sizes("nep_invoker_blob");
 
@@ -238,7 +234,7 @@ void NativeInvokerGenerator::generate() {
   Register input_addr_reg = tmp1;
   JavaCallConv in_conv;
   DowncallNativeCallConv out_conv(_input_registers, input_addr_reg->as_VMReg());
-  ArgumentShuffle arg_shuffle(_signature, _num_args, _signature, _num_args, &in_conv, &out_conv, r19->as_VMReg());
+  ArgumentShuffle arg_shuffle(_signature, _signature, &in_conv, &out_conv, r19->as_VMReg());
 
 #ifdef ASSERT
   LogTarget(Trace, panama) lt;
