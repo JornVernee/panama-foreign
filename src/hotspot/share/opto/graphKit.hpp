@@ -796,6 +796,11 @@ class GraphKit : public Phase {
                           Node* parm2 = NULL, Node* parm3 = NULL,
                           Node* parm4 = NULL, Node* parm5 = NULL,
                           Node* parm6 = NULL, Node* parm7 = NULL);
+  Node* make_runtime_call(int flags,
+                          const TypeFunc* call_type, address call_addr,
+                          const char* call_name,
+                          const TypePtr* adr_type,
+                          Node** parms);
 
   Node* sign_extend_byte(Node* in);
   Node* sign_extend_short(Node* in);

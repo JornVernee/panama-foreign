@@ -1083,7 +1083,11 @@ Node* CallStaticJavaNode::Ideal(PhaseGVN* phase, bool can_reshape) {
         set_generator(NULL);
       }
     } else if (iid == vmIntrinsics::_linkToNative) {
-      // never retry
+      Node* nep_node = in(TypeFunc::Parms + callee->arg_size() - 1);
+      if (nep_node->Opcode() == Op_ConP) {
+        phase->C->prepend_late_inline(cg);
+        set_generator(NULL);
+      }
     } else {
       assert(callee->has_member_arg(), "wrong type of call?");
       if (in(TypeFunc::Parms + callee->arg_size() - 1)->Opcode() == Op_ConP) {

@@ -6190,6 +6190,35 @@ const TypeFunc *TypeFunc::make(ciMethod* method) {
   return tf;
 }
 
+const TypeFunc* TypeFunc::make(ciMethodType* method_type) {
+  uint n_args = method_type->ptype_slot_count();
+  const Type** arg_types = TypeTuple::fields(n_args);
+  for (int ptype_idx = 0, slot_idx = TypeFunc::Parms; ptype_idx < method_type->ptype_count(); ptype_idx++) {
+    ciType* type = method_type->ptype_at(ptype_idx);
+    arg_types[slot_idx++] = Type::get_const_type(type);
+    if (type->is_two_word()) {
+      arg_types[slot_idx++] = Type::HALF;
+    }
+  }
+
+  ciType* rtype = method_type->rtype();
+  uint n_returns = method_type->rtype->size();
+  const Type** ret_types = TypeTuple::fields(n_returns);
+  {
+    ret_types[TypeFunc::Parms+0] = Type::get_const_type(rtype);
+    if (rtype->is_two_word()) {
+      arg_types[TypeFunc::Parms+1] = Type::HALF;
+    }
+  }
+
+  return TypeFunc::make(
+    TypeTuple::make(TypeFunc::Parms + n_args, arg_types),
+    TypeTuple::make(TypeFunc::Parms + n_returns, ret_types)
+  );
+}
+
+
+
 //------------------------------meet-------------------------------------------
 // Compute the MEET of two types.  It returns a new Type object.
 const Type *TypeFunc::xmeet( const Type *t ) const {

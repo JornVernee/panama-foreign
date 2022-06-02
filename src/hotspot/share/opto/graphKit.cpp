@@ -2456,7 +2456,6 @@ Node* GraphKit::opt_iff(Node* region, Node* iff) {
   return slow_taken;
 }
 
-//-----------------------------make_runtime_call-------------------------------
 Node* GraphKit::make_runtime_call(int flags,
                                   const TypeFunc* call_type, address call_addr,
                                   const char* call_name,
@@ -2467,6 +2466,18 @@ Node* GraphKit::make_runtime_call(int flags,
                                   Node* parm2, Node* parm3,
                                   Node* parm4, Node* parm5,
                                   Node* parm6, Node* parm7) {
+  Node* parms[] = {
+    parm0, parm1, parm2, parm3, parm4, parm5, parm6, parm7
+  };
+  make_runtime_call(flags, call_type, call_addr, call_name, adr_type, parms);
+}
+
+//-----------------------------make_runtime_call-------------------------------
+Node* GraphKit::make_runtime_call(int flags,
+                                  const TypeFunc* call_type, address call_addr,
+                                  const char* call_name,
+                                  const TypePtr* adr_type,
+                                  Node** parms) {
   assert(call_addr != NULL, "must not call NULL targets");
 
   // Slow-path call
@@ -2505,15 +2516,14 @@ Node* GraphKit::make_runtime_call(int flags,
   }
 
   // Hook each parm in order.  Stop looking at the first NULL.
-  if (parm0 != NULL) { call->init_req(TypeFunc::Parms+0, parm0);
-  if (parm1 != NULL) { call->init_req(TypeFunc::Parms+1, parm1);
-  if (parm2 != NULL) { call->init_req(TypeFunc::Parms+2, parm2);
-  if (parm3 != NULL) { call->init_req(TypeFunc::Parms+3, parm3);
-  if (parm4 != NULL) { call->init_req(TypeFunc::Parms+4, parm4);
-  if (parm5 != NULL) { call->init_req(TypeFunc::Parms+5, parm5);
-  if (parm6 != NULL) { call->init_req(TypeFunc::Parms+6, parm6);
-  if (parm7 != NULL) { call->init_req(TypeFunc::Parms+7, parm7);
-  /* close each nested if ===> */  } } } } } } } }
+  for (int i = 0; i < 8; i++) {
+    Node* parm = parms[i];
+    if (parm != nullptr) {
+        call->init_req(TypeFunc::Parms+i, parm);
+    } else {
+      break;
+    }
+  }
   assert(call->in(call->req()-1) != NULL, "must initialize all parms");
 
   if (!is_leaf) {

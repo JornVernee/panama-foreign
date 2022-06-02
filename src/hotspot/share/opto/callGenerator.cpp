@@ -1002,6 +1002,49 @@ CallGenerator* CallGenerator::for_method_handle_call(JVMState* jvms, ciMethod* c
   }
 }
 
+class RuntimeCallGenerator : public CallGenerator {
+private:
+  int _flags;
+  const TypeFunc* _call_type;
+  address _call_addr;
+  const char* _call_name;
+  const TypePtr* _adr_type;
+public:
+  RuntimeCallGenerator(int flags,
+                       const TypeFunc* call_type,
+                       address call_addr,
+                       const char* call_name,
+                       const TypePtr* adr_type)
+   : CallGenerator(nullptr), _flags(flags), _call_type(call_type),
+     _call_addr(call_addr), _call_name(call_name), _adr_type(adr_type) {}
+
+  virtual JVMState* generate(JVMState* jvms);
+};
+
+JVMState* RuntimeCallGenerator::generate(JVMState* jvms) {
+  GraphKit kit(jvms);
+
+  uint arg_cnt = _call_type->domain()->cnt();
+  Node** parms = NEW_RESOURCE_ARRAY(Node*, arg_cnt); // mark?
+  for (uint i = 0; i < arg_cnt; i++) {
+    parms[i] = kit.argument(i);
+  }
+
+  Node* call = kit.make_runtime_call(_flags, _call_type, _call_addr, _call_name, _adr_type, parms);
+  if (call == NULL) return NULL;
+
+  if (_call_type->return_type() == T_VOID) {
+    ret = top();
+  } else {
+    Node* ret = kit.gvn().transform(new ProjNode(call, TypeFunc::Parms));
+  }
+
+  kit.push_node(_call_type->return_type(), ret);
+
+  kit.C->print_inlining_update(this);
+  return kit.transfer_exceptions_into_jvms();
+}
+
 CallGenerator* CallGenerator::for_method_handle_inline(JVMState* jvms, ciMethod* caller, ciMethod* callee, bool allow_inline, bool& input_not_const) {
   GraphKit kit(jvms);
   PhaseGVN& gvn = kit.gvn();
@@ -1128,8 +1171,29 @@ CallGenerator* CallGenerator::for_method_handle_inline(JVMState* jvms, ciMethod*
     break;
 
     case vmIntrinsics::_linkToNative:
-    print_inlining_failure(C, callee, jvms->depth() - 1, jvms->bci(),
-                           "native call");
+      if (UseNewCode) {
+        Node* nep_n = kit.argument(callee->arg_size() - 1); // NativeEntryPoint
+        // This check needs to be kept in sync with the one in CallStaticJavaNode::Ideal
+        if (nep_n->Opcode() == Op_ConP) {
+          input_not_const = false;
+          const TypeOopPtr* nep_t = nep_n->bottom_type()->is_oopptr();
+          ciNativeEntryPoint* nep = nep_t->const_oop()->as_native_entry_point();
+          address downcall_stub_addr = nep->downcall_stub_addr();
+          TypeFunc* call_type = TypeFunc::make(nep->method_type());
+
+          return new RuntimeCallGenerator(RC_NO_LEAF,
+                                          call_type,
+                                          downcall_stub_addr,
+                                          "downcall_stub",
+                                          TypePtr::BOTTOM);
+        } else {
+          print_inlining_failure(C, callee, jvms->depth() - 1, jvms->bci(),
+                                 "NativeEntryPoint or address not constant");
+        }
+      } else {
+        print_inlining_failure(C, callee, jvms->depth() - 1, jvms->bci(),
+                               "native call");
+      }
     break;
 
   default:
