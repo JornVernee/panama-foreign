@@ -28,6 +28,7 @@
 #include "ci/ciObjArray.hpp"
 #include "ci/ciMemberName.hpp"
 #include "ci/ciMethodHandle.hpp"
+#include "ci/ciNativeEntryPoint.hpp"
 #include "classfile/javaClasses.hpp"
 #include "compiler/compileLog.hpp"
 #include "opto/addnode.hpp"
@@ -1030,13 +1031,14 @@ JVMState* RuntimeCallGenerator::generate(JVMState* jvms) {
     parms[i] = kit.argument(i);
   }
 
-  Node* call = kit.make_runtime_call(_flags, _call_type, _call_addr, _call_name, _adr_type, parms);
+  Node* call = kit.make_runtime_call(_flags, _call_type, _call_addr, _call_name, _adr_type, parms, arg_cnt);
   if (call == NULL) return NULL;
 
+  Node* ret;
   if (_call_type->return_type() == T_VOID) {
-    ret = top();
+    ret = kit.top();
   } else {
-    Node* ret = kit.gvn().transform(new ProjNode(call, TypeFunc::Parms));
+    ret = kit.gvn().transform(new ProjNode(call, TypeFunc::Parms));
   }
 
   kit.push_node(_call_type->return_type(), ret);
@@ -1178,17 +1180,17 @@ CallGenerator* CallGenerator::for_method_handle_inline(JVMState* jvms, ciMethod*
           input_not_const = false;
           const TypeOopPtr* nep_t = nep_n->bottom_type()->is_oopptr();
           ciNativeEntryPoint* nep = nep_t->const_oop()->as_native_entry_point();
-          address downcall_stub_addr = nep->downcall_stub_addr();
-          TypeFunc* call_type = TypeFunc::make(nep->method_type());
+          address downcall_stub_address = nep->downcall_stub_address();
+          const TypeFunc* call_type = TypeFunc::make(nep->method_type());
 
-          return new RuntimeCallGenerator(RC_NO_LEAF,
+          return new RuntimeCallGenerator(GraphKit::RC_NO_LEAF,
                                           call_type,
-                                          downcall_stub_addr,
+                                          downcall_stub_address,
                                           "downcall_stub",
                                           TypePtr::BOTTOM);
         } else {
           print_inlining_failure(C, callee, jvms->depth() - 1, jvms->bci(),
-                                 "NativeEntryPoint or address not constant");
+                                 "NativeEntryPoint not constant");
         }
       } else {
         print_inlining_failure(C, callee, jvms->depth() - 1, jvms->bci(),

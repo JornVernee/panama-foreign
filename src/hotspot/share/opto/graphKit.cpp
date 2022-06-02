@@ -2469,7 +2469,7 @@ Node* GraphKit::make_runtime_call(int flags,
   Node* parms[] = {
     parm0, parm1, parm2, parm3, parm4, parm5, parm6, parm7
   };
-  make_runtime_call(flags, call_type, call_addr, call_name, adr_type, parms);
+  make_runtime_call(flags, call_type, call_addr, call_name, adr_type, parms, 8);
 }
 
 //-----------------------------make_runtime_call-------------------------------
@@ -2477,7 +2477,8 @@ Node* GraphKit::make_runtime_call(int flags,
                                   const TypeFunc* call_type, address call_addr,
                                   const char* call_name,
                                   const TypePtr* adr_type,
-                                  Node** parms) {
+                                  Node** parms,
+                                  int max_parms) {
   assert(call_addr != NULL, "must not call NULL targets");
 
   // Slow-path call
@@ -2516,10 +2517,10 @@ Node* GraphKit::make_runtime_call(int flags,
   }
 
   // Hook each parm in order.  Stop looking at the first NULL.
-  for (int i = 0; i < 8; i++) {
+  for (int i = 0; i < max_parms; i++) {
     Node* parm = parms[i];
     if (parm != nullptr) {
-        call->init_req(TypeFunc::Parms+i, parm);
+      call->init_req(TypeFunc::Parms+i, parm);
     } else {
       break;
     }

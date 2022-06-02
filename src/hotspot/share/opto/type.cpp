@@ -24,6 +24,7 @@
 
 #include "precompiled.hpp"
 #include "ci/ciMethodData.hpp"
+#include "ci/ciMethodType.hpp"
 #include "ci/ciTypeFlow.hpp"
 #include "classfile/javaClasses.hpp"
 #include "classfile/symbolTable.hpp"
@@ -6202,13 +6203,11 @@ const TypeFunc* TypeFunc::make(ciMethodType* method_type) {
   }
 
   ciType* rtype = method_type->rtype();
-  uint n_returns = method_type->rtype->size();
+  uint n_returns = rtype->size();
   const Type** ret_types = TypeTuple::fields(n_returns);
-  {
-    ret_types[TypeFunc::Parms+0] = Type::get_const_type(rtype);
-    if (rtype->is_two_word()) {
-      arg_types[TypeFunc::Parms+1] = Type::HALF;
-    }
+  ret_types[TypeFunc::Parms+0] = Type::get_const_type(rtype);
+  if (rtype->is_two_word()) {
+    arg_types[TypeFunc::Parms+1] = Type::HALF;
   }
 
   return TypeFunc::make(

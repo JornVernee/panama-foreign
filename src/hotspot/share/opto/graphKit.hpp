@@ -800,7 +800,8 @@ class GraphKit : public Phase {
                           const TypeFunc* call_type, address call_addr,
                           const char* call_name,
                           const TypePtr* adr_type,
-                          Node** parms);
+                          Node** parms,
+                          int max_parms);
 
   Node* sign_extend_byte(Node* in);
   Node* sign_extend_short(Node* in);
