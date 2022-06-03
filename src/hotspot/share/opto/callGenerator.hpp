@@ -60,6 +60,8 @@ class CallGenerator : public ResourceObj {
   virtual bool      is_parse() const            { return false; }
   // is_virtual: The call uses the receiver type to select or check the method.
   virtual bool      is_virtual() const          { return false; }
+  // is_runtime: Call to arbitrary address. Doesn't have a method.
+  virtual bool      is_runtime() const          { return false; }
   // is_deferred: The decision whether to inline or not is deferred.
   virtual bool      is_deferred() const         { return false; }
   // is_predicated: Uses an explicit check (predicate).
@@ -131,6 +133,11 @@ class CallGenerator : public ResourceObj {
   // How to generate vanilla out-of-line call sites:
   static CallGenerator* for_direct_call(ciMethod* m, bool separate_io_projs = false);   // static, special
   static CallGenerator* for_virtual_call(ciMethod* m, int vtable_index);  // virtual, interface
+
+  static CallGenerator* for_runtime_call(ciMethod* orig_callee,
+                                         int flags, const TypeFunc* call_type,
+                                         address call_addr, const char* call_name,
+                                         const TypePtr* adr_type);
 
   static CallGenerator* for_method_handle_call(  JVMState* jvms, ciMethod* caller, ciMethod* callee, bool allow_inline);
   static CallGenerator* for_method_handle_inline(JVMState* jvms, ciMethod* caller, ciMethod* callee, bool allow_inline, bool& input_not_const);

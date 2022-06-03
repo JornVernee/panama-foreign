@@ -2469,7 +2469,7 @@ Node* GraphKit::make_runtime_call(int flags,
   Node* parms[] = {
     parm0, parm1, parm2, parm3, parm4, parm5, parm6, parm7
   };
-  make_runtime_call(flags, call_type, call_addr, call_name, adr_type, parms, 8);
+  return make_runtime_call(flags, call_type, call_addr, call_name, adr_type, parms, 8);
 }
 
 //-----------------------------make_runtime_call-------------------------------

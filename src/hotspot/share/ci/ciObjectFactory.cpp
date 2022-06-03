@@ -344,7 +344,7 @@ ciObject* ciObjectFactory::create_new_object(oop o) {
       return new (arena()) ciCallSite(h_i);
     else if (java_lang_invoke_MemberName::is_instance(o))
       return new (arena()) ciMemberName(h_i);
-    else if (jdk_internal_invoke_NativeEntryPoint::is_instance(o))
+    else if (jdk_internal_foreign_abi_NativeEntryPoint::is_instance(o))
       return new (arena()) ciNativeEntryPoint(h_i);
     else if (java_lang_invoke_MethodHandle::is_instance(o))
       return new (arena()) ciMethodHandle(h_i);

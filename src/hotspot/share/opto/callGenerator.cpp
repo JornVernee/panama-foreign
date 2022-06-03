@@ -287,6 +287,53 @@ JVMState* VirtualCallGenerator::generate(JVMState* jvms) {
   return kit.transfer_exceptions_into_jvms();
 }
 
+class RuntimeCallGenerator : public CallGenerator {
+private:
+  int _flags;
+  const TypeFunc* _call_type;
+  address _call_addr;
+  const char* _call_name;
+  const TypePtr* _adr_type;
+public:
+  RuntimeCallGenerator(ciMethod* orig_callee,
+                       int flags,
+                       const TypeFunc* call_type,
+                       address call_addr,
+                       const char* call_name,
+                       const TypePtr* adr_type)
+   : CallGenerator(orig_callee), _flags(flags), _call_type(call_type),
+     _call_addr(call_addr), _call_name(call_name), _adr_type(adr_type) {}
+
+  virtual JVMState* generate(JVMState* jvms);
+
+  virtual bool is_runtime() const { return true; }
+};
+
+JVMState* RuntimeCallGenerator::generate(JVMState* jvms) {
+  GraphKit kit(jvms);
+
+  uint arg_cnt = _call_type->domain()->cnt() - TypeFunc::Parms;
+  Node** parms = NEW_ARENA_ARRAY(kit.C->comp_arena(), Node*, arg_cnt);
+  for (uint i = 0; i < arg_cnt; i++) {
+    parms[i] = kit.argument(i);
+  }
+
+  Node* call = kit.make_runtime_call(_flags, _call_type, _call_addr, _call_name, _adr_type, parms, arg_cnt);
+  assert(call != nullptr, "no retries for runtime calls");
+
+  Node* ret;
+  if (_call_type->return_type() == T_VOID) {
+    ret = kit.top();
+  } else {
+    ret = kit.gvn().transform(new ProjNode(call, TypeFunc::Parms));
+  }
+
+  kit.push_node(_call_type->return_type(), ret);
+
+  kit.C->print_inlining_update(this);
+  return kit.transfer_exceptions_into_jvms();
+}
+
 CallGenerator* CallGenerator::for_inline(ciMethod* m, float expected_uses) {
   if (InlineTree::check_can_parse(m) != NULL)  return NULL;
   return new ParseGenerator(m, expected_uses);
@@ -311,6 +358,15 @@ CallGenerator* CallGenerator::for_virtual_call(ciMethod* m, int vtable_index) {
   assert(!m->is_static(), "for_virtual_call mismatch");
   assert(!m->is_method_handle_intrinsic(), "should be a direct call");
   return new VirtualCallGenerator(m, vtable_index, false /*separate_io_projs*/);
+}
+
+CallGenerator* CallGenerator::for_runtime_call(ciMethod* orig_callee,
+                                               int flags,
+                                               const TypeFunc* call_type,
+                                               address call_addr,
+                                               const char* call_name,
+                                               const TypePtr* adr_type) {
+  return new RuntimeCallGenerator(orig_callee, flags, call_type, call_addr, call_name, adr_type);
 }
 
 // Allow inlining decisions to be delayed
@@ -1003,50 +1059,6 @@ CallGenerator* CallGenerator::for_method_handle_call(JVMState* jvms, ciMethod* c
   }
 }
 
-class RuntimeCallGenerator : public CallGenerator {
-private:
-  int _flags;
-  const TypeFunc* _call_type;
-  address _call_addr;
-  const char* _call_name;
-  const TypePtr* _adr_type;
-public:
-  RuntimeCallGenerator(int flags,
-                       const TypeFunc* call_type,
-                       address call_addr,
-                       const char* call_name,
-                       const TypePtr* adr_type)
-   : CallGenerator(nullptr), _flags(flags), _call_type(call_type),
-     _call_addr(call_addr), _call_name(call_name), _adr_type(adr_type) {}
-
-  virtual JVMState* generate(JVMState* jvms);
-};
-
-JVMState* RuntimeCallGenerator::generate(JVMState* jvms) {
-  GraphKit kit(jvms);
-
-  uint arg_cnt = _call_type->domain()->cnt();
-  Node** parms = NEW_RESOURCE_ARRAY(Node*, arg_cnt); // mark?
-  for (uint i = 0; i < arg_cnt; i++) {
-    parms[i] = kit.argument(i);
-  }
-
-  Node* call = kit.make_runtime_call(_flags, _call_type, _call_addr, _call_name, _adr_type, parms, arg_cnt);
-  if (call == NULL) return NULL;
-
-  Node* ret;
-  if (_call_type->return_type() == T_VOID) {
-    ret = kit.top();
-  } else {
-    ret = kit.gvn().transform(new ProjNode(call, TypeFunc::Parms));
-  }
-
-  kit.push_node(_call_type->return_type(), ret);
-
-  kit.C->print_inlining_update(this);
-  return kit.transfer_exceptions_into_jvms();
-}
-
 CallGenerator* CallGenerator::for_method_handle_inline(JVMState* jvms, ciMethod* caller, ciMethod* callee, bool allow_inline, bool& input_not_const) {
   GraphKit kit(jvms);
   PhaseGVN& gvn = kit.gvn();
@@ -1183,11 +1195,12 @@ CallGenerator* CallGenerator::for_method_handle_inline(JVMState* jvms, ciMethod*
           address downcall_stub_address = nep->downcall_stub_address();
           const TypeFunc* call_type = TypeFunc::make(nep->method_type());
 
-          return new RuntimeCallGenerator(GraphKit::RC_NO_LEAF,
-                                          call_type,
-                                          downcall_stub_address,
-                                          "downcall_stub",
-                                          TypePtr::BOTTOM);
+          return CallGenerator::for_runtime_call(callee,
+                                                 GraphKit::RC_NO_LEAF,
+                                                 call_type,
+                                                 downcall_stub_address,
+                                                 "downcall_stub",
+                                                 TypePtr::BOTTOM);
         } else {
           print_inlining_failure(C, callee, jvms->depth() - 1, jvms->bci(),
                                  "NativeEntryPoint not constant");

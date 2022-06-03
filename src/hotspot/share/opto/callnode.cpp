@@ -1077,23 +1077,18 @@ Node* CallStaticJavaNode::Ideal(PhaseGVN* phase, bool can_reshape) {
     // Check whether this MH handle call becomes a candidate for inlining.
     ciMethod* callee = cg->method();
     vmIntrinsics::ID iid = callee->intrinsic_id();
+    bool is_candidate = false;
     if (iid == vmIntrinsics::_invokeBasic) {
-      if (in(TypeFunc::Parms)->Opcode() == Op_ConP) {
-        phase->C->prepend_late_inline(cg);
-        set_generator(NULL);
-      }
-    } else if (iid == vmIntrinsics::_linkToNative) {
-      Node* nep_node = in(TypeFunc::Parms + callee->arg_size() - 1);
-      if (nep_node->Opcode() == Op_ConP) {
-        phase->C->prepend_late_inline(cg);
-        set_generator(NULL);
-      }
+      is_candidate = in(TypeFunc::Parms)->Opcode() == Op_ConP;
     } else {
       assert(callee->has_member_arg(), "wrong type of call?");
-      if (in(TypeFunc::Parms + callee->arg_size() - 1)->Opcode() == Op_ConP) {
-        phase->C->prepend_late_inline(cg);
-        set_generator(NULL);
-      }
+      is_candidate = in(TypeFunc::Parms + callee->arg_size() - 1)->Opcode() == Op_ConP
+        && (UseNewCode || iid != vmIntrinsics::_linkToNative);
+    }
+
+    if (is_candidate) {
+      phase->C->prepend_late_inline(cg);
+      set_generator(NULL);
     }
   }
   return CallNode::Ideal(phase, can_reshape);
