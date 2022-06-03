@@ -6195,9 +6195,9 @@ const TypeFunc* TypeFunc::make(ciMethodType* method_type) {
   uint n_args = method_type->ptype_slot_count();
   const Type** arg_types = TypeTuple::fields(n_args);
   for (int ptype_idx = 0, slot_idx = TypeFunc::Parms; ptype_idx < method_type->ptype_count(); ptype_idx++) {
-    ciType* type = method_type->ptype_at(ptype_idx);
-    arg_types[slot_idx++] = Type::get_const_type(type);
-    if (type->is_two_word()) {
+    ciType* atype = method_type->ptype_at(ptype_idx);
+    arg_types[slot_idx++] = Type::get_const_type(atype);
+    if (atype->is_two_word()) {
       arg_types[slot_idx++] = Type::HALF;
     }
   }
@@ -6207,7 +6207,7 @@ const TypeFunc* TypeFunc::make(ciMethodType* method_type) {
   const Type** ret_types = TypeTuple::fields(n_returns);
   ret_types[TypeFunc::Parms+0] = Type::get_const_type(rtype);
   if (rtype->is_two_word()) {
-    arg_types[TypeFunc::Parms+1] = Type::HALF;
+    ret_types[TypeFunc::Parms+1] = Type::HALF;
   }
 
   return TypeFunc::make(
