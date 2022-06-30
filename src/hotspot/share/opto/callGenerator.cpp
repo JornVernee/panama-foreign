@@ -1192,15 +1192,25 @@ CallGenerator* CallGenerator::for_method_handle_inline(JVMState* jvms, ciMethod*
           input_not_const = false;
           const TypeOopPtr* nep_t = nep_n->bottom_type()->is_oopptr();
           ciNativeEntryPoint* nep = nep_t->const_oop()->as_native_entry_point();
+
+          int flags = GraphKit::RC_NO_LEAF;
           address downcall_stub_address = nep->downcall_stub_address();
           const TypeFunc* call_type = TypeFunc::make(nep->method_type());
+          const char* name = "downcall_stub";
+          const TypePtr* adr_type = TypePtr::BOTTOM;
+
+          Node* addr_n = kit.argument(0); // target addr
+          if (addr_n->Opcode() == Op_ConL) {
+            intptr_t target_addr = (intptr_t) addr_n->bottom_type()->is_long()->get_con();
+            adjust_for_native_intrinsic(target_addr, flags, name, adr_type);
+          }
 
           return CallGenerator::for_runtime_call(callee,
-                                                 GraphKit::RC_NO_LEAF,
+                                                 flags,
                                                  call_type,
                                                  downcall_stub_address,
-                                                 "downcall_stub",
-                                                 TypePtr::BOTTOM);
+                                                 name,
+                                                 adr_type);
         } else {
           print_inlining_failure(C, callee, jvms->depth() - 1, jvms->bci(),
                                  "NativeEntryPoint not constant");
