@@ -26,6 +26,7 @@
 #include "precompiled.hpp"
 #include "opto/callGenerator.hpp"
 #include "opto/graphKit.hpp"
+#include "opto/type.hpp"
 
 #include <time.h>
 
@@ -33,11 +34,12 @@ void CallGenerator::adjust_for_native_intrinsic(intptr_t target,
                                                 int& flags,
                                                 const char*& name,
                                                 const TypePtr*& adr_type) {
+  // Adjust runtime call parameters for known native functions
   switch (target) {
     case (intptr_t) &clock_gettime:
       flags = GraphKit::RC_LEAF;
       name = "clock_gettime";
-      adr_type = TypePtr::BOTTOM; // time spec struct is updated. Conservative
+      adr_type = TypeRawPtr::BOTTOM; // time spec struct is updated. Only raw memory
       break;
   }
 }
