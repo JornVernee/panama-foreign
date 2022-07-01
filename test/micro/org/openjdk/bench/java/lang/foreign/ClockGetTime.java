@@ -58,9 +58,9 @@ public class ClockGetTime extends CLayouts {
             "--enable-native-access=ALL-UNNAMED", "--enable-preview",
             "-XX:+UnlockDiagnosticVMOptions", "-XX:+UseNewCode",
             //"-XX:CompileCommand=print,*ClockGetTime::intrinsified*"
-            "-XX:+LogCompilation"
+            //"-XX:+LogCompilation"
     })
-    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    //@CompilerControl(CompilerControl.Mode.DONT_INLINE)
     public int intrinsified() throws Throwable  {
         return (int) CLOCK_GETTIME.invokeExact(CLOCK_REALTIME, (Addressable) timeSpec);
     }

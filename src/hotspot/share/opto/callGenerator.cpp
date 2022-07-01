@@ -28,7 +28,6 @@
 #include "ci/ciObjArray.hpp"
 #include "ci/ciMemberName.hpp"
 #include "ci/ciMethodHandle.hpp"
-#include "ci/ciNativeEntryPoint.hpp"
 #include "classfile/javaClasses.hpp"
 #include "compiler/compileLog.hpp"
 #include "opto/addnode.hpp"

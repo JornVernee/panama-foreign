@@ -1771,7 +1771,6 @@ public:
   const TypeTuple* range()  const { return _range; }
 
   static const TypeFunc *make(ciMethod* method);
-  static const TypeFunc *make(ciMethodType* method_type);
   static const TypeFunc *make(ciSignature signature, const Type* extra);
   static const TypeFunc *make(const TypeTuple* domain, const TypeTuple* range);
 
