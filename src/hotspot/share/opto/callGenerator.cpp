@@ -1192,43 +1192,23 @@ CallGenerator* CallGenerator::for_method_handle_inline(JVMState* jvms, ciMethod*
 
     case vmIntrinsics::_linkToNative:
       if (UseNewCode) {
-        Node* nep_n = kit.argument(callee->arg_size() - 1); // NativeEntryPoint
+        Node* addr_n = kit.argument(0); // target addr
         // This check needs to be kept in sync with the one in CallStaticJavaNode::Ideal
-        if (nep_n->Opcode() == Op_ConP) {
-          input_not_const = false;
-          const TypeOopPtr* nep_t = nep_n->bottom_type()->is_oopptr();
-          ciNativeEntryPoint* nep = nep_t->const_oop()->as_native_entry_point();
-
-          Node* addr_n = kit.argument(0); // target addr
-          if (addr_n->Opcode() == Op_ConL) {
-            // check for intrinsic
-            intptr_t target_addr = (intptr_t) addr_n->bottom_type()->is_long()->get_con();
-            CallGenerator* intrinsic_gen = CallGenerator::for_native_intrinsic(callee, target_addr);
-            if (intrinsic_gen != nullptr) {
-              if (C->log() != nullptr) {
-                C->log()->elem("l2n_intrin msg='success' type='intrinsic' name='%s'",
-                  ((RuntimeCallGenerator*)intrinsic_gen)->call_name());
-              }
-              return intrinsic_gen;
-            }
-          } else {
+        if (addr_n->Opcode() == Op_ConL) {
+          input_not_const = false; // no need to retry later
+          // check for intrinsic
+          intptr_t target_addr = (intptr_t) addr_n->bottom_type()->is_long()->get_con();
+          CallGenerator* intrinsic_gen = CallGenerator::for_native_intrinsic(callee, target_addr);
+          if (intrinsic_gen != nullptr) {
             if (C->log() != nullptr) {
-              C->log()->elem("l2n_intrin msg='target address not constant' opcode='%d'", addr_n->Opcode());
+              C->log()->elem("l2n_intrin msg='success' name='%s'",
+                ((RuntimeCallGenerator*)intrinsic_gen)->call_name());
             }
+            return intrinsic_gen;
           }
-
-          if (C->log() != nullptr) {
-            C->log()->elem("l2n_intrin msg='success' type='downcall_stub'");
-          }
-          return CallGenerator::for_runtime_call(callee,
-                                                 GraphKit::RC_NO_LEAF,
-                                                 TypeFunc::make(nep->method_type()),
-                                                 nep->downcall_stub_address(),
-                                                 "downcall_stub",
-                                                 TypePtr::BOTTOM);
         } else {
           print_inlining_failure(C, callee, jvms->depth() - 1, jvms->bci(),
-                                 "NativeEntryPoint not constant");
+                                 "target address not constant");
         }
       } else {
         print_inlining_failure(C, callee, jvms->depth() - 1, jvms->bci(),

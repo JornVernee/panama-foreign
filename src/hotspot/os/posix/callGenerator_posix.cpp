@@ -28,10 +28,9 @@
 #include "opto/graphKit.hpp"
 #include "opto/runtime.hpp"
 #include "opto/type.hpp"
+#include "utilities/globalDefinitions.hpp"
 
 #include <time.h>
-
-#define CAST_FN(fun) (intptr_t) (address) &fun
 
 CallGenerator* CallGenerator::for_native_intrinsic(ciMethod* orig_callee, intptr_t target) {
   assert(orig_callee->intrinsic_id() == vmIntrinsics::_linkToNative, "expected linkToNative");
@@ -39,19 +38,17 @@ CallGenerator* CallGenerator::for_native_intrinsic(ciMethod* orig_callee, intptr
   Compile* C = Compile::current();
   if (C->log() != nullptr) {
     C->log()->elem("l2n_intrin msg='checking for intrinsic' target='" INTPTR_FORMAT "' clock_gettime='" INTPTR_FORMAT "'",
-      target, CAST_FN(clock_gettime));
+      target, CAST_FROM_FN_PTR(intptr_t, clock_gettime));
   }
 
-  if (target == CAST_FN(clock_gettime)) {
+  if (target == CAST_FROM_FN_PTR(intptr_t, clock_gettime)) {
     return CallGenerator::for_runtime_call(orig_callee,
                                            GraphKit::RC_LEAF,
                                            OptoRuntime::clock_gettime_Type(),
-                                           (address) &clock_gettime,
+                                           CAST_FROM_FN_PTR(address, clock_gettime),
                                            "clock_gettime",
                                            TypeRawPtr::BOTTOM, // time spec struct is updated. Only raw memory
-                                           1); // drop target addr
+                                           2); // drop target addr (2 because of HALF)
   }
   return nullptr;
 }
-
-#undef CAST_FN

@@ -1140,7 +1140,7 @@ int SharedRuntime::c_calling_convention(const BasicType *sig_bt,
         regs[i].set_bad();
         break;
       default:
-        ShouldNotReachHere();
+        ShouldNotReachHereMsg("i = %d. Basic Type = %d", i, sig_bt[i]);
         break;
       }
     }

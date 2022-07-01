@@ -134,6 +134,13 @@ do {                                                                            
   BREAKPOINT;                                                                     \
 } while (0)
 
+#define ShouldNotReachHereMsg(msg, ...)                                           \
+do {                                                                              \
+  TOUCH_ASSERT_POISON;                                                            \
+  report_vm_error(__FILE__, __LINE__, "ShouldNotReachHere()", msg, __VA_ARGS__);  \
+  BREAKPOINT;                                                                     \
+} while (0)
+
 #define Unimplemented()                                                           \
 do {                                                                              \
   TOUCH_ASSERT_POISON;                                                            \

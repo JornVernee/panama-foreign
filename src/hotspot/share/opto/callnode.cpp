@@ -1080,10 +1080,11 @@ Node* CallStaticJavaNode::Ideal(PhaseGVN* phase, bool can_reshape) {
     bool is_candidate = false;
     if (iid == vmIntrinsics::_invokeBasic) {
       is_candidate = in(TypeFunc::Parms)->Opcode() == Op_ConP;
+    } else if (UseNewCode && iid == vmIntrinsics::_linkToNative) {
+      is_candidate = in(TypeFunc::Parms)->Opcode() == Op_ConL; // target addr
     } else {
       assert(callee->has_member_arg(), "wrong type of call?");
-      is_candidate = in(TypeFunc::Parms + callee->arg_size() - 1)->Opcode() == Op_ConP
-        && (UseNewCode || iid != vmIntrinsics::_linkToNative);
+      is_candidate = in(TypeFunc::Parms + callee->arg_size() - 1)->Opcode() == Op_ConP;
     }
 
     if (is_candidate) {
