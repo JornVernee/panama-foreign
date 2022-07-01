@@ -26,20 +26,22 @@
 #include "precompiled.hpp"
 #include "opto/callGenerator.hpp"
 #include "opto/graphKit.hpp"
+#include "opto/runtime.hpp"
 #include "opto/type.hpp"
 
 #include <time.h>
 
-void CallGenerator::adjust_for_native_intrinsic(intptr_t target,
-                                                int& flags,
-                                                const char*& name,
-                                                const TypePtr*& adr_type) {
-  // Adjust runtime call parameters for known native functions
+CallGenerator* for_native_intrinsic(ciMethod* orig_callee, intptr_t target) {
+  assert(orig_callee->intrinsic_id() == vmIntrinsics::_linkToNative, "expected linkToNative");
   switch (target) {
     case (intptr_t) &clock_gettime:
-      flags = GraphKit::RC_LEAF;
-      name = "clock_gettime";
-      adr_type = TypeRawPtr::BOTTOM; // time spec struct is updated. Only raw memory
-      break;
+      return CallGenerator::for_runtime_call(orig_callee
+                                             GraphKit::RC_LEAF,
+                                             &clock_gettime,
+                                             OptoRuntime::clock_gettime_Type(),
+                                             "clock_gettime",
+                                             TypeRawPtr::BOTTOM, // time spec struct is updated. Only raw memory
+                                             1); // drop target addr
   }
+  return nullptr;
 }

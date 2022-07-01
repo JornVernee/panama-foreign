@@ -294,15 +294,18 @@ private:
   address _call_addr;
   const char* _call_name;
   const TypePtr* _adr_type;
+  uint _dropped_prefix_args;
 public:
   RuntimeCallGenerator(ciMethod* orig_callee,
                        int flags,
                        const TypeFunc* call_type,
                        address call_addr,
                        const char* call_name,
-                       const TypePtr* adr_type)
+                       const TypePtr* adr_type,
+                       uint dropped_prefix_args)
    : CallGenerator(orig_callee), _flags(flags), _call_type(call_type),
-     _call_addr(call_addr), _call_name(call_name), _adr_type(adr_type) {}
+     _call_addr(call_addr), _call_name(call_name), _adr_type(adr_type),
+     _dropped_prefix_args(dropped_prefix_args) {}
 
   virtual JVMState* generate(JVMState* jvms);
 
@@ -315,7 +318,7 @@ JVMState* RuntimeCallGenerator::generate(JVMState* jvms) {
   uint arg_cnt = _call_type->domain()->cnt() - TypeFunc::Parms;
   Node** parms = NEW_ARENA_ARRAY(kit.C->comp_arena(), Node*, arg_cnt);
   for (uint i = 0; i < arg_cnt; i++) {
-    parms[i] = kit.argument(i);
+    parms[i] = kit.argument(i + _dropped_prefix_args);
   }
 
   Node* call = kit.make_runtime_call(_flags, _call_type, _call_addr, _call_name, _adr_type, parms, arg_cnt);
@@ -365,8 +368,9 @@ CallGenerator* CallGenerator::for_runtime_call(ciMethod* orig_callee,
                                                const TypeFunc* call_type,
                                                address call_addr,
                                                const char* call_name,
-                                               const TypePtr* adr_type) {
-  return new RuntimeCallGenerator(orig_callee, flags, call_type, call_addr, call_name, adr_type);
+                                               const TypePtr* adr_type,
+                                               uint dropped_prefix_args) {
+  return new RuntimeCallGenerator(orig_callee, flags, call_type, call_addr, call_name, adr_type, dropped_prefix_args);
 }
 
 // Allow inlining decisions to be delayed
@@ -1193,24 +1197,22 @@ CallGenerator* CallGenerator::for_method_handle_inline(JVMState* jvms, ciMethod*
           const TypeOopPtr* nep_t = nep_n->bottom_type()->is_oopptr();
           ciNativeEntryPoint* nep = nep_t->const_oop()->as_native_entry_point();
 
-          int flags = GraphKit::RC_NO_LEAF;
-          address downcall_stub_address = nep->downcall_stub_address();
-          const TypeFunc* call_type = TypeFunc::make(nep->method_type());
-          const char* name = "downcall_stub";
-          const TypePtr* adr_type = TypePtr::BOTTOM;
-
           Node* addr_n = kit.argument(0); // target addr
           if (addr_n->Opcode() == Op_ConL) {
+            // check for intrinsic
             intptr_t target_addr = (intptr_t) addr_n->bottom_type()->is_long()->get_con();
-            adjust_for_native_intrinsic(target_addr, flags, name, adr_type);
+            CallGenerator* intrinsic_gen = CallGenerator::for_native_intrinsic(callee, target_addr);
+            if (intrinsic_gen != nullptr) {
+              return intrinsic_gen;
+            }
           }
 
           return CallGenerator::for_runtime_call(callee,
-                                                 flags,
-                                                 call_type,
-                                                 downcall_stub_address,
-                                                 name,
-                                                 adr_type);
+                                                 GraphKit::RC_NO_LEAF,
+                                                 TypeFunc::make(nep->method_type()),
+                                                 nep->downcall_stub_address(),
+                                                 "downcall_stub",
+                                                 TypePtr::BOTTOM);
         } else {
           print_inlining_failure(C, callee, jvms->depth() - 1, jvms->bci(),
                                  "NativeEntryPoint not constant");

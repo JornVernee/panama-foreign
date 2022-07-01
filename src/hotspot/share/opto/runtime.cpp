@@ -1586,6 +1586,22 @@ bool OptoRuntime::is_deoptimized_caller_frame(JavaThread *thread) {
   return caller_frame.is_deoptimized_frame();
 }
 
+// https://linux.die.net/man/3/clock_gettime
+const TypeFunc* OptoRuntime::clock_gettime_Type() {
+  const Type** domain_fields = TypeTuple::fields(2);
+  domain_fields[TypeFunc::Parms + 0] = TypeInt::BOTTOM; // clockid_t
+  domain_fields[TypeFunc::Parms + 1] = TypeRawPtr::BOTTOM; // struct timespec*
+  const TypeTuple *domain = TypeTuple::make(TypeFunc::Parms + 1, domain_fields);
+
+  // create result type (range)
+  const Type** range_fields = TypeTuple::fields(1);
+  range_fields[TypeFunc::Parms + 0] = TypeInt::BOTTOM; // int
+
+  const TypeTuple *range = TypeTuple::make(TypeFunc::Parms + 0, range_fields);
+
+  return TypeFunc::make(domain, range);
+}
+
 
 const TypeFunc *OptoRuntime::register_finalizer_Type() {
   // create input type (domain)

@@ -137,7 +137,7 @@ class CallGenerator : public ResourceObj {
   static CallGenerator* for_runtime_call(ciMethod* orig_callee,
                                          int flags, const TypeFunc* call_type,
                                          address call_addr, const char* call_name,
-                                         const TypePtr* adr_type);
+                                         const TypePtr* adr_type, uint dropped_prefix_args = 0);
 
   static CallGenerator* for_method_handle_call(  JVMState* jvms, ciMethod* caller, ciMethod* callee, bool allow_inline);
   static CallGenerator* for_method_handle_inline(JVMState* jvms, ciMethod* caller, ciMethod* callee, bool allow_inline, bool& input_not_const);
@@ -196,7 +196,8 @@ class CallGenerator : public ResourceObj {
   static bool is_inlined_method_handle_intrinsic(ciMethod* symbolic_info, ciMethod* m);
 
 private:
-  static void adjust_for_native_intrinsic(intptr_t target, int& flags, const char*& name, const TypePtr*& adr_type);
+  // for replacing linkToNative calls to known targets
+  static CallGenerator* for_native_intrinsic(ciMethod* orig_callee, intptr_t target);
 };
 
 

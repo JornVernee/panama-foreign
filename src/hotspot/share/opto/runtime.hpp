@@ -288,6 +288,8 @@ private:
 
   static const TypeFunc* updateBytesAdler32_Type();
 
+  static const TypeFunc* clock_gettime_Type();
+
   // leaf on stack replacement interpreter accessor types
   static const TypeFunc* osr_end_Type();
 
