@@ -2,6 +2,7 @@ package org.openjdk.bench.java.lang.foreign;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
+import org.openjdk.jmh.annotations.CompilerControl;
 import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.Mode;
@@ -53,7 +54,13 @@ public class ClockGetTime extends CLayouts {
     }
 
     @Benchmark
-    @Fork(value = 3, jvmArgsAppend = { "--enable-native-access=ALL-UNNAMED", "--enable-preview", "-XX:+UnlockDiagnosticVMOptions", "-XX:+UseNewCode" })
+    @Fork(value = 3, jvmArgsAppend = {
+            "--enable-native-access=ALL-UNNAMED", "--enable-preview",
+            "-XX:+UnlockDiagnosticVMOptions", "-XX:+UseNewCode",
+            //"-XX:CompileCommand=print,*ClockGetTime::intrinsified*"
+            "-XX:+LogCompilation"
+    })
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
     public int intrinsified() throws Throwable  {
         return (int) CLOCK_GETTIME.invokeExact(CLOCK_REALTIME, (Addressable) timeSpec);
     }

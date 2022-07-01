@@ -310,10 +310,13 @@ public:
   virtual JVMState* generate(JVMState* jvms);
 
   virtual bool is_runtime() const { return true; }
+
+  const char* call_name() const { return _call_name; }
 };
 
 JVMState* RuntimeCallGenerator::generate(JVMState* jvms) {
   GraphKit kit(jvms);
+  kit.C->print_inlining_update(this);
 
   uint arg_cnt = _call_type->domain()->cnt() - TypeFunc::Parms;
   Node** parms = NEW_ARENA_ARRAY(kit.C->comp_arena(), Node*, arg_cnt);
@@ -333,7 +336,6 @@ JVMState* RuntimeCallGenerator::generate(JVMState* jvms) {
 
   kit.push_node(_call_type->return_type(), ret);
 
-  kit.C->print_inlining_update(this);
   return kit.transfer_exceptions_into_jvms();
 }
 
@@ -1203,10 +1205,21 @@ CallGenerator* CallGenerator::for_method_handle_inline(JVMState* jvms, ciMethod*
             intptr_t target_addr = (intptr_t) addr_n->bottom_type()->is_long()->get_con();
             CallGenerator* intrinsic_gen = CallGenerator::for_native_intrinsic(callee, target_addr);
             if (intrinsic_gen != nullptr) {
+              if (C->log() != nullptr) {
+                C->log()->elem("l2n_intrin msg='success' type='intrinsic' name='%s'",
+                  ((RuntimeCallGenerator*)intrinsic_gen)->call_name());
+              }
               return intrinsic_gen;
+            }
+          } else {
+            if (C->log() != nullptr) {
+              C->log()->elem("l2n_intrin msg='target address not constant' opcode='%d'", addr_n->Opcode());
             }
           }
 
+          if (C->log() != nullptr) {
+            C->log()->elem("l2n_intrin msg='success' type='downcall_stub'");
+          }
           return CallGenerator::for_runtime_call(callee,
                                                  GraphKit::RC_NO_LEAF,
                                                  TypeFunc::make(nep->method_type()),
@@ -1219,7 +1232,7 @@ CallGenerator* CallGenerator::for_method_handle_inline(JVMState* jvms, ciMethod*
         }
       } else {
         print_inlining_failure(C, callee, jvms->depth() - 1, jvms->bci(),
-                               "native call");
+                               "native call C2");
       }
     break;
 
