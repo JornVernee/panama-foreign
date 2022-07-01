@@ -31,17 +31,20 @@
 
 #include <time.h>
 
-CallGenerator* for_native_intrinsic(ciMethod* orig_callee, intptr_t target) {
+#define CAST_FN(fun) (intptr_t) (address) &fun
+
+CallGenerator* CallGenerator::for_native_intrinsic(ciMethod* orig_callee, intptr_t target) {
   assert(orig_callee->intrinsic_id() == vmIntrinsics::_linkToNative, "expected linkToNative");
-  switch (target) {
-    case (intptr_t) &clock_gettime:
-      return CallGenerator::for_runtime_call(orig_callee
-                                             GraphKit::RC_LEAF,
-                                             &clock_gettime,
-                                             OptoRuntime::clock_gettime_Type(),
-                                             "clock_gettime",
-                                             TypeRawPtr::BOTTOM, // time spec struct is updated. Only raw memory
-                                             1); // drop target addr
+  if (target == CAST_FN(clock_gettime)) {
+    return CallGenerator::for_runtime_call(orig_callee,
+                                           GraphKit::RC_LEAF,
+                                           OptoRuntime::clock_gettime_Type(),
+                                           (address) &clock_gettime,
+                                           "clock_gettime",
+                                           TypeRawPtr::BOTTOM, // time spec struct is updated. Only raw memory
+                                           1); // drop target addr
   }
   return nullptr;
 }
+
+#undef CAST_FN
