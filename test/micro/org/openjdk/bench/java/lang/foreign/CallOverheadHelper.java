@@ -41,6 +41,7 @@ public class CallOverheadHelper extends CLayouts {
     static final Linker abi = Linker.nativeLinker();
 
     static final MethodHandle func;
+    static final MethodHandle func_trivial;
     static final MethodHandle func_v;
     static Addressable func_addr;
     static final MethodHandle identity;
@@ -95,10 +96,10 @@ public class CallOverheadHelper extends CLayouts {
         SymbolLookup loaderLibs = SymbolLookup.loaderLookup();
         {
             func_addr = loaderLibs.lookup("func").orElseThrow();
-            MethodType mt = MethodType.methodType(void.class);
             FunctionDescriptor fd = FunctionDescriptor.ofVoid();
             func_v = abi.downcallHandle(fd);
             func = insertArguments(func_v, 0, func_addr);
+            func_trivial = abi.downcallHandle(func_addr, fd.asTrivial());
         }
         {
             identity_addr = loaderLibs.lookup("identity").orElseThrow();

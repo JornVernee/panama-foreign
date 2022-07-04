@@ -36,7 +36,8 @@ public:
                                          const ABIDescriptor& abi,
                                          const GrowableArray<VMReg>& input_registers,
                                          const GrowableArray<VMReg>& output_registers,
-                                         bool needs_return_buffer);
+                                         bool needs_return_buffer,
+                                         bool trivial);
 };
 
 #endif // SHARE_VM_PRIMS_DOWNCALLLINKER_HPP

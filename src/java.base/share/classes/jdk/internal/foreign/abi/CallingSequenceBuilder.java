@@ -55,6 +55,7 @@ public class CallingSequenceBuilder {
 
     private MethodType mt = MethodType.methodType(void.class);
     private FunctionDescriptor desc = FunctionDescriptor.ofVoid();
+    private boolean trivial = false;
 
     public CallingSequenceBuilder(ABIDescriptor abi, boolean forUpcall) {
         this.abi = abi;
@@ -89,6 +90,11 @@ public class CallingSequenceBuilder {
             .count() > 1;
     }
 
+    public CallingSequenceBuilder setTrivial() {
+        this.trivial = true;
+        return this;
+    }
+
     public CallingSequence build() {
         boolean needsReturnBuffer = needsReturnBuffer();
         long returnBufferSize = needsReturnBuffer ? computeReturnBuferSize() : 0;
@@ -118,7 +124,7 @@ public class CallingSequenceBuilder {
             callerMethodType = computeCallerTypeForUpcall();
             calleeMethodType = mt;
         }
-        return new CallingSequence(forUpcall, callerMethodType, calleeMethodType, desc, needsReturnBuffer,
+        return new CallingSequence(forUpcall, callerMethodType, calleeMethodType, desc, needsReturnBuffer, trivial,
                 returnBufferSize, allocationSize, inputBindings, outputBindings);
     }
 

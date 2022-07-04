@@ -53,10 +53,12 @@ public sealed class FunctionDescriptor permits FunctionDescriptor.VariadicFuncti
 
     private final MemoryLayout resLayout;
     private final List<MemoryLayout> argLayouts;
+    private final boolean trivial;
 
-    private FunctionDescriptor(MemoryLayout resLayout, List<MemoryLayout> argLayouts) {
+    private FunctionDescriptor(MemoryLayout resLayout, List<MemoryLayout> argLayouts, boolean trivial) {
         this.resLayout = resLayout;
         this.argLayouts = argLayouts;
+        this.trivial = trivial;
     }
 
     /**
@@ -83,7 +85,7 @@ public sealed class FunctionDescriptor permits FunctionDescriptor.VariadicFuncti
         Objects.requireNonNull(resLayout);
         Objects.requireNonNull(argLayouts);
         Arrays.stream(argLayouts).forEach(Objects::requireNonNull);
-        return new FunctionDescriptor(resLayout, List.of(argLayouts));
+        return new FunctionDescriptor(resLayout, List.of(argLayouts), false);
     }
 
     /**
@@ -94,7 +96,7 @@ public sealed class FunctionDescriptor permits FunctionDescriptor.VariadicFuncti
     public static FunctionDescriptor ofVoid(MemoryLayout... argLayouts) {
         Objects.requireNonNull(argLayouts);
         Arrays.stream(argLayouts).forEach(Objects::requireNonNull);
-        return new FunctionDescriptor(null, List.of(argLayouts));
+        return new FunctionDescriptor(null, List.of(argLayouts), false);
     }
 
     /**
@@ -109,7 +111,14 @@ public sealed class FunctionDescriptor permits FunctionDescriptor.VariadicFuncti
     public FunctionDescriptor asVariadic(MemoryLayout... variadicLayouts) {
         Objects.requireNonNull(variadicLayouts);
         Arrays.stream(variadicLayouts).forEach(Objects::requireNonNull);
-        return variadicLayouts.length == 0 ? this : new VariadicFunction(this, variadicLayouts);
+        return variadicLayouts.length == 0 ? this : new VariadicFunction(this, trivial, variadicLayouts);
+    }
+
+    /**
+     * {@return a new function descriptor with the 'trivial' flag set}
+     */
+    public FunctionDescriptor asTrivial() {
+        return new FunctionDescriptor(resLayout, argLayouts, true);
     }
 
     /**
@@ -147,7 +156,7 @@ public sealed class FunctionDescriptor permits FunctionDescriptor.VariadicFuncti
         newLayouts.addAll(argLayouts.subList(0, index));
         newLayouts.addAll(added);
         newLayouts.addAll(argLayouts.subList(index, argLayouts.size()));
-        return new FunctionDescriptor(resLayout, newLayouts);
+        return new FunctionDescriptor(resLayout, newLayouts, trivial);
     }
 
     /**
@@ -157,7 +166,7 @@ public sealed class FunctionDescriptor permits FunctionDescriptor.VariadicFuncti
      */
     public FunctionDescriptor changeReturnLayout(MemoryLayout newReturn) {
         Objects.requireNonNull(newReturn);
-        return new FunctionDescriptor(newReturn, argLayouts);
+        return new FunctionDescriptor(newReturn, argLayouts, trivial);
     }
 
     /**
@@ -166,7 +175,7 @@ public sealed class FunctionDescriptor permits FunctionDescriptor.VariadicFuncti
      * @return the new function descriptor.
      */
     public FunctionDescriptor dropReturnLayout() {
-        return new FunctionDescriptor(null, argLayouts);
+        return new FunctionDescriptor(null, argLayouts, trivial);
     }
 
     /**
@@ -174,12 +183,13 @@ public sealed class FunctionDescriptor permits FunctionDescriptor.VariadicFuncti
      */
     @Override
     public String toString() {
-        return String.format("(%s)%s",
+        return String.format("(%s)%s%s",
                 IntStream.range(0, argLayouts.size())
                         .mapToObj(i -> (i == firstVariadicArgumentIndex() ?
                                 "..." : "") + argLayouts.get(i))
                         .collect(Collectors.joining()),
-                returnLayout().map(Object::toString).orElse("v"));
+                returnLayout().map(Object::toString).orElse("v"),
+                trivial ? "!" : "");
     }
 
     /**
@@ -199,7 +209,8 @@ public sealed class FunctionDescriptor permits FunctionDescriptor.VariadicFuncti
         return other instanceof FunctionDescriptor f &&
                 Objects.equals(resLayout, f.resLayout) &&
                 Objects.equals(argLayouts, f.argLayouts) &&
-                firstVariadicArgumentIndex() == f.firstVariadicArgumentIndex();
+                firstVariadicArgumentIndex() == f.firstVariadicArgumentIndex() &&
+                trivial == f.trivial;
     }
 
     /**
@@ -207,16 +218,23 @@ public sealed class FunctionDescriptor permits FunctionDescriptor.VariadicFuncti
      */
     @Override
     public int hashCode() {
-        return Objects.hash(argLayouts, resLayout, firstVariadicArgumentIndex());
+        return Objects.hash(argLayouts, resLayout, firstVariadicArgumentIndex(), trivial);
+    }
+
+    /**
+     * {@return whether this function descriptor has the 'trivial' flag set}
+     */
+    public boolean isTrivial() {
+        return trivial;
     }
 
     static final class VariadicFunction extends FunctionDescriptor {
 
         private final int firstVariadicIndex;
 
-        public VariadicFunction(FunctionDescriptor descriptor, MemoryLayout... argLayouts) {
+        public VariadicFunction(FunctionDescriptor descriptor, boolean trivial, MemoryLayout... argLayouts) {
             super(descriptor.returnLayout().orElse(null),
-                    Stream.concat(descriptor.argumentLayouts().stream(), Stream.of(argLayouts)).toList());
+                    Stream.concat(descriptor.argumentLayouts().stream(), Stream.of(argLayouts)).toList(), trivial);
             this.firstVariadicIndex = descriptor.argumentLayouts().size();
         }
 
@@ -242,6 +260,11 @@ public sealed class FunctionDescriptor permits FunctionDescriptor.VariadicFuncti
 
         @Override
         public FunctionDescriptor dropReturnLayout() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public FunctionDescriptor asTrivial() {
             throw new UnsupportedOperationException();
         }
     }

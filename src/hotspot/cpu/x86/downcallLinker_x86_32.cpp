@@ -30,7 +30,8 @@ RuntimeStub* DowncallLinker::make_downcall_stub(BasicType* signature,
                                                 const ABIDescriptor& abi,
                                                 const GrowableArray<VMReg>& input_registers,
                                                 const GrowableArray<VMReg>& output_registers,
-                                                bool needs_return_buffer) {
+                                                bool needs_return_buffer,
+                                                bool trivial) {
   Unimplemented();
   return nullptr;
 }

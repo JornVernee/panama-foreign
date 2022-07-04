@@ -44,6 +44,7 @@ class DowncallStubGenerator : public StubCodeGenerator {
   const GrowableArray<VMReg>& _output_registers;
 
   bool _needs_return_buffer;
+  bool _trivial;
 
   int _frame_complete;
   int _framesize;
@@ -56,7 +57,8 @@ public:
                          const ABIDescriptor& abi,
                          const GrowableArray<VMReg>& input_registers,
                          const GrowableArray<VMReg>& output_registers,
-                         bool needs_return_buffer)
+                         bool needs_return_buffer,
+                         bool trivial)
    : StubCodeGenerator(buffer, PrintMethodHandleStubs),
      _signature(signature),
      _num_args(num_args),
@@ -65,6 +67,7 @@ public:
      _input_registers(input_registers),
      _output_registers(output_registers),
      _needs_return_buffer(needs_return_buffer),
+     _trivial(trivial),
      _frame_complete(0),
      _framesize(0),
      _oop_maps(NULL) {
@@ -93,10 +96,11 @@ RuntimeStub* DowncallLinker::make_downcall_stub(BasicType* signature,
                                                 const ABIDescriptor& abi,
                                                 const GrowableArray<VMReg>& input_registers,
                                                 const GrowableArray<VMReg>& output_registers,
-                                                bool needs_return_buffer) {
+                                                bool needs_return_buffer,
+                                                bool trivial) {
   int locs_size  = 64;
   CodeBuffer code("nep_invoker_blob", native_invoker_code_size, locs_size);
-  DowncallStubGenerator g(&code, signature, num_args, ret_bt, abi, input_registers, output_registers, needs_return_buffer);
+  DowncallStubGenerator g(&code, signature, num_args, ret_bt, abi, input_registers, output_registers, needs_return_buffer, trivial);
   g.generate();
   code.log_section_sizes("nep_invoker_blob");
 
@@ -132,10 +136,10 @@ void DowncallStubGenerator::generate() {
     // out arg area (e.g. for stack args)
   };
 
-  Register shufffle_reg = rbx;
+  Register shuffle_reg = rbx;
   JavaCallingConvention in_conv;
   NativeCallingConvention out_conv(_input_registers);
-  ArgumentShuffle arg_shuffle(_signature, _num_args, _signature, _num_args, &in_conv, &out_conv, shufffle_reg->as_VMReg());
+  ArgumentShuffle arg_shuffle(_signature, _num_args, _signature, _num_args, &in_conv, &out_conv, shuffle_reg->as_VMReg());
 
 #ifndef PRODUCT
   LogTarget(Trace, foreign, downcall) lt;
@@ -160,12 +164,12 @@ void DowncallStubGenerator::generate() {
     ret_buf_addr_rsp_offset = allocated_frame_size - 8;
   }
 
-  // when we don't use a return buffer we need to spill the return value around our slowpath calls
+  // when we don't use a return buffer we need to spill the return value around our slow path calls
   // when we use a return buffer case this SHOULD be unused.
   RegSpiller out_reg_spiller(_output_registers);
   int spill_rsp_offset = -1;
 
-  if (!_needs_return_buffer) {
+  if (!_needs_return_buffer && !_trivial) {
     spill_rsp_offset = 0;
     // spill area can be shared with the above, so we take the max of the 2
     allocated_frame_size = out_reg_spiller.spill_size_bytes() > allocated_frame_size
@@ -177,7 +181,7 @@ void DowncallStubGenerator::generate() {
   _framesize += framesize_base + (allocated_frame_size >> LogBytesPerInt);
   assert(is_even(_framesize/2), "sp not 16-byte aligned");
 
-  _oop_maps  = new OopMapSet();
+  _oop_maps = !_trivial ? new OopMapSet() : nullptr;
   address start = __ pc();
 
   __ enter();
@@ -189,17 +193,19 @@ void DowncallStubGenerator::generate() {
 
   address the_pc = __ pc();
 
-  __ block_comment("{ thread java2native");
-  __ set_last_Java_frame(rsp, rbp, (address)the_pc);
-  OopMap* map = new OopMap(_framesize, 0);
-  _oop_maps->add_gc_map(the_pc - start, map);
+  if (!_trivial) {
+    __ block_comment("{ thread java2native");
+    __ set_last_Java_frame(rsp, rbp, (address)the_pc);
+    OopMap* map = new OopMap(_framesize, 0);
+    _oop_maps->add_gc_map(the_pc - start, map);
 
-  // State transition
-  __ movl(Address(r15_thread, JavaThread::thread_state_offset()), _thread_in_native);
-  __ block_comment("} thread java2native");
+    // State transition
+    __ movl(Address(r15_thread, JavaThread::thread_state_offset()), _thread_in_native);
+    __ block_comment("} thread java2native");
+  }
 
   __ block_comment("{ argument shuffle");
-  arg_shuffle.generate(_masm, shufffle_reg->as_VMReg(), 0, _abi._shadow_space_bytes);
+  arg_shuffle.generate(_masm, shuffle_reg->as_VMReg(), 0, _abi._shadow_space_bytes);
   if (_needs_return_buffer) {
     // spill our return buffer address
     assert(ret_buf_addr_rsp_offset != -1, "no return buffer addr spill");
@@ -245,92 +251,95 @@ void DowncallStubGenerator::generate() {
     }
   }
 
-  __ block_comment("{ thread native2java");
-  __ restore_cpu_control_state_after_jni();
-
-  __ movl(Address(r15_thread, JavaThread::thread_state_offset()), _thread_in_native_trans);
-
-  // Force this write out before the read below
-  __ membar(Assembler::Membar_mask_bits(
-          Assembler::LoadLoad | Assembler::LoadStore |
-          Assembler::StoreLoad | Assembler::StoreStore));
-
   Label L_after_safepoint_poll;
   Label L_safepoint_poll_slow_path;
-
-  __ safepoint_poll(L_safepoint_poll_slow_path, r15_thread, true /* at_return */, false /* in_nmethod */);
-  __ cmpl(Address(r15_thread, JavaThread::suspend_flags_offset()), 0);
-  __ jcc(Assembler::notEqual, L_safepoint_poll_slow_path);
-
-  __ bind(L_after_safepoint_poll);
-
-  // change thread state
-  __ movl(Address(r15_thread, JavaThread::thread_state_offset()), _thread_in_Java);
-
-  __ block_comment("reguard stack check");
   Label L_reguard;
   Label L_after_reguard;
-  __ cmpl(Address(r15_thread, JavaThread::stack_guard_state_offset()), StackOverflow::stack_guard_yellow_reserved_disabled);
-  __ jcc(Assembler::equal, L_reguard);
-  __ bind(L_after_reguard);
+  if (!_trivial) {
+    __ block_comment("{ thread native2java");
+    __ restore_cpu_control_state_after_jni();
 
-  __ reset_last_Java_frame(r15_thread, true);
-  __ block_comment("} thread native2java");
+    __ movl(Address(r15_thread, JavaThread::thread_state_offset()), _thread_in_native_trans);
+
+    // Force this write out before the read below
+    __ membar(Assembler::Membar_mask_bits(
+            Assembler::LoadLoad | Assembler::LoadStore |
+            Assembler::StoreLoad | Assembler::StoreStore));
+
+    __ safepoint_poll(L_safepoint_poll_slow_path, r15_thread, true /* at_return */, false /* in_nmethod */);
+    __ cmpl(Address(r15_thread, JavaThread::suspend_flags_offset()), 0);
+    __ jcc(Assembler::notEqual, L_safepoint_poll_slow_path);
+
+    __ bind(L_after_safepoint_poll);
+
+    // change thread state
+    __ movl(Address(r15_thread, JavaThread::thread_state_offset()), _thread_in_Java);
+
+    __ block_comment("reguard stack check");
+    __ cmpl(Address(r15_thread, JavaThread::stack_guard_state_offset()), StackOverflow::stack_guard_yellow_reserved_disabled);
+    __ jcc(Assembler::equal, L_reguard);
+    __ bind(L_after_reguard);
+
+    __ reset_last_Java_frame(r15_thread, true);
+    __ block_comment("} thread native2java");
+  }
 
   __ leave(); // required for proper stackwalking of RuntimeStub frame
   __ ret(0);
 
-  //////////////////////////////////////////////////////////////////////////////
+  if (!_trivial) {
+    //////////////////////////////////////////////////////////////////////////////
 
-  __ block_comment("{ L_safepoint_poll_slow_path");
-  __ bind(L_safepoint_poll_slow_path);
-  __ vzeroupper();
+    __ block_comment("{ L_safepoint_poll_slow_path");
+    __ bind(L_safepoint_poll_slow_path);
+    __ vzeroupper();
 
-  if(!_needs_return_buffer) {
-    out_reg_spiller.generate_spill(_masm, spill_rsp_offset);
+    if(!_needs_return_buffer) {
+      out_reg_spiller.generate_spill(_masm, spill_rsp_offset);
+    }
+
+    __ mov(c_rarg0, r15_thread);
+    __ mov(r12, rsp); // remember sp
+    __ subptr(rsp, frame::arg_reg_save_area_bytes); // windows
+    __ andptr(rsp, -16); // align stack as required by ABI
+    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, JavaThread::check_special_condition_for_native_trans)));
+    __ mov(rsp, r12); // restore sp
+    __ reinit_heapbase();
+
+    if(!_needs_return_buffer) {
+      out_reg_spiller.generate_fill(_masm, spill_rsp_offset);
+    }
+
+    __ jmp(L_after_safepoint_poll);
+    __ block_comment("} L_safepoint_poll_slow_path");
+
+    //////////////////////////////////////////////////////////////////////////////
+
+    __ block_comment("{ L_reguard");
+    __ bind(L_reguard);
+    __ vzeroupper();
+
+    if(!_needs_return_buffer) {
+      out_reg_spiller.generate_spill(_masm, spill_rsp_offset);
+    }
+
+    __ mov(r12, rsp); // remember sp
+    __ subptr(rsp, frame::arg_reg_save_area_bytes); // windows
+    __ andptr(rsp, -16); // align stack as required by ABI
+    __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::reguard_yellow_pages)));
+    __ mov(rsp, r12); // restore sp
+    __ reinit_heapbase();
+
+    if(!_needs_return_buffer) {
+      out_reg_spiller.generate_fill(_masm, spill_rsp_offset);
+    }
+
+    __ jmp(L_after_reguard);
+
+    __ block_comment("} L_reguard");
+
+    //////////////////////////////////////////////////////////////////////////////
   }
-
-  __ mov(c_rarg0, r15_thread);
-  __ mov(r12, rsp); // remember sp
-  __ subptr(rsp, frame::arg_reg_save_area_bytes); // windows
-  __ andptr(rsp, -16); // align stack as required by ABI
-  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, JavaThread::check_special_condition_for_native_trans)));
-  __ mov(rsp, r12); // restore sp
-  __ reinit_heapbase();
-
-  if(!_needs_return_buffer) {
-    out_reg_spiller.generate_fill(_masm, spill_rsp_offset);
-  }
-
-  __ jmp(L_after_safepoint_poll);
-  __ block_comment("} L_safepoint_poll_slow_path");
-
-  //////////////////////////////////////////////////////////////////////////////
-
-  __ block_comment("{ L_reguard");
-  __ bind(L_reguard);
-  __ vzeroupper();
-
-  if(!_needs_return_buffer) {
-    out_reg_spiller.generate_spill(_masm, spill_rsp_offset);
-  }
-
-  __ mov(r12, rsp); // remember sp
-  __ subptr(rsp, frame::arg_reg_save_area_bytes); // windows
-  __ andptr(rsp, -16); // align stack as required by ABI
-  __ call(RuntimeAddress(CAST_FROM_FN_PTR(address, SharedRuntime::reguard_yellow_pages)));
-  __ mov(rsp, r12); // restore sp
-  __ reinit_heapbase();
-
-  if(!_needs_return_buffer) {
-    out_reg_spiller.generate_fill(_masm, spill_rsp_offset);
-  }
-
-  __ jmp(L_after_reguard);
-
-  __ block_comment("} L_reguard");
-
-  //////////////////////////////////////////////////////////////////////////////
 
   __ flush();
 }

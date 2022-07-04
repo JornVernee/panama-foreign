@@ -36,6 +36,7 @@ public class CallingSequence {
     private final MethodType calleeMethodType;
     private final FunctionDescriptor desc;
     private final boolean needsReturnBuffer;
+    private final boolean trivial;
     private final long returnBufferSize;
     private final long allocationSize;
 
@@ -43,13 +44,14 @@ public class CallingSequence {
     private final List<List<Binding>> argumentBindings;
 
     public CallingSequence(boolean forUpcall, MethodType callerMethodType, MethodType calleeMethodType, FunctionDescriptor desc,
-                           boolean needsReturnBuffer, long returnBufferSize, long allocationSize,
+                           boolean needsReturnBuffer, boolean trivial, long returnBufferSize, long allocationSize,
                            List<List<Binding>> argumentBindings, List<Binding> returnBindings) {
         this.forUpcall = forUpcall;
         this.callerMethodType = callerMethodType;
         this.calleeMethodType = calleeMethodType;
         this.desc = desc;
         this.needsReturnBuffer = needsReturnBuffer;
+        this.trivial = trivial;
         this.returnBufferSize = returnBufferSize;
         this.allocationSize = allocationSize;
         this.returnBindings = returnBindings;
@@ -198,5 +200,9 @@ public class CallingSequence {
         sb.append("}\n");
 
         return sb.toString();
+    }
+
+    public boolean isTrivial() {
+        return trivial;
     }
 }
