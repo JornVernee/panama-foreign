@@ -28,7 +28,6 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
@@ -122,6 +121,7 @@ public class VMProps implements Callable<Map<String, String>> {
         map.put("release.implementor", this::implementor);
         map.put("jdk.containerized", this::jdkContainerized);
         map.put("vm.flagless", this::isFlagless);
+        map.put("fallbackLinker", this::fallbackLinker);
         vmGC(map); // vm.gc.X = true/false
         vmGCforCDS(map); // may set vm.gc
         vmOptFinalFlags(map);
@@ -597,6 +597,12 @@ public class VMProps implements Callable<Map<String, String>> {
                           .isEmpty();
 
         return "" + result;
+    }
+
+    private String fallbackLinker() {
+        boolean flag = !WB.isLinkerSupporter()
+                || "FALLBACK".equals(System.getProperty("jdk.internal.foreign.CABI"));
+        return String.valueOf(flag);
     }
 
     /**

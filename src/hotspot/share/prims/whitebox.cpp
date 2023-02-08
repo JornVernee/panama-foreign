@@ -65,6 +65,7 @@
 #include "oops/objArrayOop.inline.hpp"
 #include "oops/oop.inline.hpp"
 #include "oops/typeArrayOop.inline.hpp"
+#include "prims/foreignGlobals.hpp"
 #include "prims/resolvedMethodTable.hpp"
 #include "prims/wbtestmethods/parserTests.hpp"
 #include "prims/whitebox.inline.hpp"
@@ -2514,6 +2515,10 @@ WB_ENTRY(void, WB_UnlockCritical(JNIEnv* env, jobject wb))
   GCLocker::unlock_critical(thread);
 WB_END
 
+WB_ENTRY(jboolean, WB_IsLinkerSupporter(JNIEnv* env, jobject o))
+  return ForeignGlobals::has_port() ? JNI_TRUE : JNI_FALSE;
+WB_END
+
 #define CC (char*)
 
 static JNINativeMethod methods[] = {
@@ -2791,6 +2796,7 @@ static JNINativeMethod methods[] = {
 
   {CC"lockCritical",    CC"()V",                      (void*)&WB_LockCritical},
   {CC"unlockCritical",  CC"()V",                      (void*)&WB_UnlockCritical},
+  {CC"isLinkerSupporter",  CC"()Z",                   (void*)&WB_IsLinkerSupporter},
 };
 
 
