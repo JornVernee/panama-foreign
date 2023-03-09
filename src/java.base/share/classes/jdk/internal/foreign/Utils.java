@@ -36,11 +36,14 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.invoke.VarHandle;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import jdk.internal.access.JavaLangAccess;
 import jdk.internal.access.SharedSecrets;
 import jdk.internal.foreign.abi.SharedUtils;
 import jdk.internal.vm.annotation.ForceInline;
@@ -54,6 +57,7 @@ import static sun.security.action.GetPropertyAction.privilegedGetProperty;
  */
 public final class Utils {
 
+    private static final JavaLangAccess JLA = SharedSecrets.getJavaLangAccess();
     public static final boolean IS_WINDOWS = privilegedGetProperty("os.name").startsWith("Windows");
 
     // Suppresses default constructor, ensuring non-instantiability.
@@ -243,5 +247,10 @@ public final class Utils {
 
     public static int byteWidthOfPrimitive(Class<?> primitive) {
         return Wrapper.forPrimitiveType(primitive).bitWidth() / 8;
+    }
+
+    public static MemorySegment stringToReadOnlySegment(String str, Charset charset) throws CharacterCodingException {
+        byte[] strBytes = JLA.getBytesNoRepl(str, charset);
+        return HeapMemorySegmentImpl.OfByte.fromArray(strBytes).asReadOnly();
     }
 }

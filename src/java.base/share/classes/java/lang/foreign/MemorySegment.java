@@ -36,6 +36,8 @@ import java.nio.ByteOrder;
 import java.nio.CharBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileChannel.*;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Objects;
@@ -43,6 +45,8 @@ import java.util.Optional;
 import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
+
+import jdk.internal.access.JavaLangAccess;
 import jdk.internal.foreign.AbstractMemorySegmentImpl;
 import jdk.internal.foreign.HeapMemorySegmentImpl;
 import jdk.internal.foreign.MemorySessionImpl;
@@ -1122,6 +1126,24 @@ public sealed interface MemorySegment permits AbstractMemorySegmentImpl {
      */
     static MemorySegment ofBuffer(Buffer buffer) {
         return AbstractMemorySegmentImpl.ofBuffer(buffer);
+    }
+
+    /**
+     * Creates a {@linkplain #isReadOnly() read-only} heap segment backed by the on-heap region of memory that holds
+     * the encoded character data of the given string.
+     * The scope of the returned segment is a fresh scope that is always alive, and keeps the given byte array reachable.
+     * The returned segment is always accessible, from any thread. Its {@link #address()} is set to zero.
+     *
+     * @implNote Since this method returns a read-only segment, in certain cases encoding the string's internal
+     * character data can be avoided, and the returned memory segment will be a direct view of the string's character data.
+     *
+     * @param str the string
+     * @param charset the charset used for decoding the string
+     * @return a heap memory segment backed by a byte array.
+     * @throws CharacterCodingException for malformed input or unmappable characters
+     */
+    static MemorySegment ofString(String str, Charset charset) throws CharacterCodingException {
+        return Utils.stringToReadOnlySegment(str, charset);
     }
 
     /**
