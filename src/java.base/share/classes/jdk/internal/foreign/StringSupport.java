@@ -46,6 +46,23 @@ public final class StringSupport {
 
     private StringSupport() {}
 
+    // Maximum segment byte size for which a critical method will be invoked.
+    private static final long MAX_CRITICAL_SIZE = 1024L;
+    private static final MethodHandle STRNLEN_CRITICAL;
+    private static final MethodHandle STRNLEN;
+    private static final boolean SIZE_T_IS_INT;
+
+    static {
+        var size_t = Objects.requireNonNull(Linker.nativeLinker().canonicalLayouts().get("size_t"));
+        Linker linker = Linker.nativeLinker();
+        var strnlen = linker.defaultLookup().find("strnlen").orElseThrow();
+        var description = FunctionDescriptor.of(size_t, ADDRESS, size_t);
+
+        STRNLEN_CRITICAL = linker.downcallHandle(strnlen, description, Linker.Option.critical(false));
+        STRNLEN = linker.downcallHandle(strnlen, description);
+        SIZE_T_IS_INT = (size_t.byteSize() == Integer.BYTES);
+    }
+
     public static String read(MemorySegment segment, long offset, Charset charset) {
         return switch (CharsetKind.of(charset)) {
             case SINGLE_BYTE -> readByte(segment, offset, charset);
