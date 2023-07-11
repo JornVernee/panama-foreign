@@ -57,7 +57,7 @@ public class LoopOverPollutedSegments extends JavaLayouts {
 
 
     Arena confinedArena, sharedArena;
-    MemorySegment nativeSegment, nativeSharedSegment, nativeGlobal, heapSegmentBytes, heapSegmentFloats;
+    MemorySegment nativeSegment, nativeSharedSegment, nativeImplicit, nativeGlobal, heapSegmentBytes, heapSegmentFloats;
     byte[] arr;
     long addr;
 
@@ -74,6 +74,7 @@ public class LoopOverPollutedSegments extends JavaLayouts {
         nativeSegment = scope1.allocate(ALLOC_SIZE, 4);
         Arena scope = sharedArena;
         nativeSharedSegment = scope.allocate(ALLOC_SIZE, 4);
+        nativeImplicit = Arena.ofAuto().allocate(ALLOC_SIZE, 4);
         nativeGlobal = nativeSegment.reinterpret(Arena.global(), null);
         heapSegmentBytes = MemorySegment.ofArray(new byte[ALLOC_SIZE]);
         heapSegmentFloats = MemorySegment.ofArray(new float[ELEM_SIZE]);
@@ -85,6 +86,8 @@ public class LoopOverPollutedSegments extends JavaLayouts {
                 nativeSegment.setAtIndex(JAVA_FLOAT_UNALIGNED, i, i);
                 nativeSharedSegment.setAtIndex(JAVA_INT_UNALIGNED, i, i);
                 nativeSharedSegment.setAtIndex(JAVA_FLOAT_UNALIGNED, i, i);
+                nativeImplicit.setAtIndex(JAVA_INT_UNALIGNED, i, i);
+                nativeImplicit.setAtIndex(JAVA_FLOAT_UNALIGNED, i, i);
                 nativeGlobal.setAtIndex(JAVA_INT_UNALIGNED, i, i);
                 nativeGlobal.setAtIndex(JAVA_FLOAT_UNALIGNED, i, i);
                 VH_INT_UNALIGNED.set(nativeSegment, (long)i, i);
