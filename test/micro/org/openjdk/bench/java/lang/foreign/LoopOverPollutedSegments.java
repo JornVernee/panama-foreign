@@ -46,7 +46,8 @@ import static java.lang.foreign.ValueLayout.*;
 @Measurement(iterations = 10, time = 500, timeUnit = TimeUnit.MILLISECONDS)
 @State(org.openjdk.jmh.annotations.Scope.Thread)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
-@Fork(value = 3, jvmArgsAppend = {"--enable-preview", "--enable-native-access=ALL-UNNAMED"})
+@Fork(value = 3, jvmArgsAppend = {"--enable-preview", "--enable-native-access=ALL-UNNAMED",
+                                  "-XX:+UnlockDiagnosticVMOptions", "-XX:+UseNewCode"})
 public class LoopOverPollutedSegments extends JavaLayouts {
 
     static final int ELEM_SIZE = 1_000_000;
