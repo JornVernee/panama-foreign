@@ -51,7 +51,8 @@ import static org.openjdk.jmh.annotations.CompilerControl.Mode.*;
 @Measurement(iterations = 10, time = 500, timeUnit = TimeUnit.MILLISECONDS)
 @State(org.openjdk.jmh.annotations.Scope.Thread)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
-@Fork(value = 3, jvmArgsAppend = { "--enable-preview", "--enable-native-access=ALL-UNNAMED" })
+@Fork(value = 3, jvmArgsAppend = { "--enable-preview", "--enable-native-access=ALL-UNNAMED",
+                                   "-XX:+UnlockDiagnosticVMOptions", "-XX:-UseNewCode" })
 public class MemorySegmentGet extends JavaLayouts {
 
     static final Unsafe unsafe = Utils.unsafe;

@@ -192,6 +192,8 @@
   /* GC support */                                                                                              \
   do_klass(FillerObject_klass,                          jdk_internal_vm_FillerObject                          ) \
                                                                                                                 \
+  do_klass(GlobalSession_klass,                         jdk_internal_foreign_GlobalSession                    ) \
+
   /*end*/
 
 #endif // SHARE_CLASSFILE_VMCLASSMACROS_HPP

@@ -640,6 +640,8 @@ class methodHandle;
                                                                                                                         \
   /* special marker for blackholed methods: */                                                                          \
   do_intrinsic(_blackhole,                java_lang_Object,       blackhole_name, star_name, F_S)                       \
+  do_intrinsic(_checkValidStateRaw, jdk_internal_foreign_MemorySessionImpl, checkValidStateRaw_name, void_method_signature, F_R) \
+   do_name(     checkValidStateRaw_name,    "checkValidStateRaw")                                                       \
                                                                                                                         \
   /* unsafe memory references (there are a lot of them...) */                                                           \
   do_signature(getReference_signature,    "(Ljava/lang/Object;J)Ljava/lang/Object;")                                    \

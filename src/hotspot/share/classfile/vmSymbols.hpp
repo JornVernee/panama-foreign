@@ -365,6 +365,8 @@
   NOT_LP64(  do_alias(intptr_signature,               int_signature)  )                           \
   LP64_ONLY( do_alias(intptr_signature,               long_signature) )                           \
   /* Foreign API Support */                                                                       \
+  template(jdk_internal_foreign_MemorySessionImpl,                   "jdk/internal/foreign/MemorySessionImpl") \
+  template(jdk_internal_foreign_GlobalSession,                       "jdk/internal/foreign/GlobalSession") \
   template(jdk_internal_foreign_abi_NativeEntryPoint,                "jdk/internal/foreign/abi/NativeEntryPoint") \
   template(jdk_internal_foreign_abi_ABIDescriptor,                   "jdk/internal/foreign/abi/ABIDescriptor") \
   template(jdk_internal_foreign_abi_VMStorage,                       "jdk/internal/foreign/abi/VMStorage") \

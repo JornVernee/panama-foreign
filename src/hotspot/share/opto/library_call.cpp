@@ -747,6 +747,9 @@ bool LibraryCallKit::try_to_inline(int predicate) {
   case vmIntrinsics::_blackhole:
     return inline_blackhole();
 
+  case vmIntrinsics::_checkValidStateRaw:
+    return inline_checkValidStateRaw();
+
   default:
     // If you get here, it may be that someone has added a new intrinsic
     // to the list in vmIntrinsics.hpp without implementing it here.
@@ -8022,4 +8025,16 @@ bool LibraryCallKit::inline_blackhole() {
   }
 
   return true;
+}
+
+bool LibraryCallKit::inline_checkValidStateRaw() {
+  // if the receiver is known to be a GlobalSession, drop the check here
+  Node* recv = argument(0);
+  const TypeOopPtr* recv_type = recv->bottom_type()->isa_oopptr();
+  const TypeOopPtr* global_session_type = TypeOopPtr::make_from_klass(env()->GlobalSession_klass());
+
+  // if true, don't do anything here
+  // if false, bail out and compile code normally
+  bool is_global_session = recv_type->higher_equal(global_session_type);
+  return UseNewCode && is_global_session;
 }

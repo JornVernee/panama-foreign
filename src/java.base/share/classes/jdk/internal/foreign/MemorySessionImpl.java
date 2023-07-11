@@ -35,6 +35,7 @@ import java.lang.ref.Cleaner;
 import java.util.Objects;
 import jdk.internal.misc.ScopedMemoryAccess;
 import jdk.internal.vm.annotation.ForceInline;
+import jdk.internal.vm.annotation.IntrinsicCandidate;
 
 /**
  * This class manages the temporal bounds associated with a memory segment as well
@@ -198,7 +199,8 @@ public abstract sealed class MemorySessionImpl
      * please use {@link #checkValidState()}.
      */
     @ForceInline
-    public void checkValidStateRaw() {
+    @IntrinsicCandidate
+    public final void checkValidStateRaw() {
         if (owner != null && owner != Thread.currentThread()) {
             throw WRONG_THREAD;
         }
