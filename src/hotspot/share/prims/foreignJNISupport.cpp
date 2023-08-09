@@ -1,0 +1,57 @@
+/*
+ * Copyright (c) 2020, 2023, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
+ *
+ */
+
+#include "precompiled.hpp"
+#include "classfile/vmSymbols.hpp"
+#include "runtime/interfaceSupport.inline.hpp"
+#include "runtime/jniHandles.inline.hpp"
+
+JNI_ENTRY(jobject, JNISupport_resolveGlobalRef0(JNIEnv* env, jclass _unused, jlong ref))
+  jobject obj = (jobject) ref;
+  if (obj == nullptr) {
+    return nullptr;
+  }
+
+  if (JNIHandles::handle_type(THREAD, obj) == JNIGlobalRefType
+      && JNIHandles::resolve_external_guard(obj) != nullptr) {
+    return obj;
+  }
+
+  THROW_MSG_(vmSymbols::java_lang_IllegalArgumentException(),
+             "Invalid JNI reference", nullptr);
+JNI_END
+
+#define CC (char*)  /*cast a literal from (const char*)*/
+#define FN_PTR(f) CAST_FROM_FN_PTR(void*, &f)
+
+static JNINativeMethod JNISupport_methods[] = {
+  {CC "resolveGlobalRef0", CC "(J)Ljava/lang/Object;", FN_PTR(JNISupport_resolveGlobalRef0)},
+};
+
+JNI_ENTRY(void, JVM_RegisterJNISupportMethods(JNIEnv *env, jclass JNISupport_class))
+  ThreadToNativeFromVM ttnfv(thread);
+  int status = env->RegisterNatives(JNISupport_class, JNISupport_methods, sizeof(JNISupport_methods)/sizeof(JNINativeMethod));
+  guarantee(status == JNI_OK && !env->ExceptionOccurred(),
+            "register java.lang.foreign.JNISupport natives");
+JNI_END
