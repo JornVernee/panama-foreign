@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,6 +29,8 @@ import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.Mode;
 import org.openjdk.jmh.annotations.OutputTimeUnit;
 import org.openjdk.jmh.annotations.State;
+import org.openjdk.jmh.annotations.Setup;
+import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 
 import org.openjdk.jmh.infra.Blackhole;
@@ -59,6 +61,7 @@ public class UpcallWithRef extends CLayouts {
     static final MethodHandle DOWNCALL_UPCALL_WITH_REF;
 
     static final MemorySegment UPCALL_STUB_GLOBAL_REF;
+    static final MemorySegment UPCALL_STUB_GLOBAL_REF_AMORTIZED;
     static final MemorySegment UPCALL_STUB_KNOWN_FIELD;
     static final MemorySegment UPCALL_STUB_THREAD_LOCAL;
     static final MemorySegment UPCALL_STUB_SCOPED_VALUE;
@@ -77,6 +80,7 @@ public class UpcallWithRef extends CLayouts {
         };
 
         MethodHandle TARGET_GLOBAL_REF_MH = getMH.apply("targetGlobalRef");
+        MethodHandle TARGET_GLOBAL_REF_AMORTIZED_MH = getMH.apply("targetGlobalRefAmortized");
         MethodHandle TARGET_KNOWN_FIELD_MH = getMH.apply("targetKnownField");
         MethodHandle TARGET_THREAD_LOCAL_MH = getMH.apply("targetThreadLocal");
         MethodHandle TARGET_SCOPED_VALUE_MH = getMH.apply("targetScopedValue");
@@ -88,6 +92,7 @@ public class UpcallWithRef extends CLayouts {
         Arena upcallStubArena = Arena.ofAuto();
         FunctionDescriptor upcallStubDesc = FunctionDescriptor.ofVoid(C_POINTER);
         UPCALL_STUB_GLOBAL_REF = LINKER.upcallStub(TARGET_GLOBAL_REF_MH, upcallStubDesc, upcallStubArena);
+        UPCALL_STUB_GLOBAL_REF_AMORTIZED = LINKER.upcallStub(TARGET_GLOBAL_REF_AMORTIZED_MH, upcallStubDesc, upcallStubArena);
         UPCALL_STUB_KNOWN_FIELD = LINKER.upcallStub(TARGET_KNOWN_FIELD_MH, upcallStubDesc, upcallStubArena);
         UPCALL_STUB_THREAD_LOCAL = LINKER.upcallStub(TARGET_THREAD_LOCAL_MH, upcallStubDesc, upcallStubArena);
         UPCALL_STUB_SCOPED_VALUE = LINKER.upcallStub(TARGET_SCOPED_VALUE_MH, upcallStubDesc, upcallStubArena);
@@ -98,6 +103,20 @@ public class UpcallWithRef extends CLayouts {
 
     static Blackhole bh;
     static Widget knownField;
+
+    Arena refBoxArena;
+    RefBox<Widget> refBox;
+
+    @Setup
+    public void setup() {
+        refBoxArena = Arena.ofConfined();
+        refBox = new RefBox<>(refBoxArena);
+    }
+
+    @TearDown
+    public void tearDown() {
+        refBoxArena.close();
+    }
 
     // the global ref variants have the advantage that they can be used in a concurrent, cross-thread scenario
     // the other options can't
@@ -110,6 +129,15 @@ public class UpcallWithRef extends CLayouts {
             MemorySegment ref = JNISupport.newGlobalRef(w, arena);
             DOWNCALL_UPCALL_WITH_REF.invokeExact(ref, UPCALL_STUB_GLOBAL_REF);
         }
+    }
+
+    @Benchmark
+    public void global_ref_amortized(Blackhole bh) throws Throwable {
+        UpcallWithRef.bh = bh;
+
+        Widget w = new Widget(42);
+        refBox.set(w);
+        DOWNCALL_UPCALL_WITH_REF.invokeExact(refBox.ref(), UPCALL_STUB_GLOBAL_REF_AMORTIZED);
     }
 
     @Benchmark
@@ -154,8 +182,44 @@ public class UpcallWithRef extends CLayouts {
 
     record Widget(int x) {}
 
+    static class RefBox<T> {
+        private MemorySegment ref;
+        private T val;
+
+        public RefBox(Arena arena) {
+            ref = JNISupport.newGlobalRef(this, arena);
+        }
+
+        public MemorySegment ref() {
+            return ref;
+        }
+
+        public void set(T val) {
+            this.val = val;
+        }
+
+        public T get() {
+            return val;
+        }
+
+        @SuppressWarnings("unchecked")
+        public <T> RefBox<T> cast(Class<T> valueType) {
+            valueType.cast(val);
+            return (RefBox<T>) this;
+        }
+
+        @SuppressWarnings("unchecked")
+        public static <T> RefBox<T> resolve(MemorySegment ref, Class<T> valueType) {
+            return ((RefBox<?>) JNISupport.resolveGlobalRef(ref)).cast(valueType);
+        }
+    }
+
     private static void targetGlobalRef(MemorySegment ref) {
         bh.consume((Widget) JNISupport.resolveGlobalRef(ref));
+    }
+
+    private static void targetGlobalRefAmortized(MemorySegment ref) {
+        bh.consume(RefBox.resolve(ref, Widget.class).get());
     }
 
     private static void targetKnownField(MemorySegment unused) {
