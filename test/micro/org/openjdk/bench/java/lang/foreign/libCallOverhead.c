@@ -21,6 +21,8 @@
  * questions.
  */
 
+#include <math.h>
+
 #ifdef _WIN64
 #define EXPORT __declspec(dllexport)
 #else
@@ -37,6 +39,10 @@ typedef struct {
     int x;
     int y;
 } Point;
+
+EXPORT double distance(Point p) {
+    return hypot(p.x, p.y);
+}
 
 EXPORT Point identity_struct(Point p) {
     return p;
