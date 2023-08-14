@@ -171,7 +171,7 @@ GrowableArray<VMStorage> ForeignGlobals::upcall_filter_receiver_reg(const Growab
 
 GrowableArray<VMStorage> ForeignGlobals::downcall_filter_offset_regs(const GrowableArray<VMStorage>& regs,
                                                                      BasicType* signature, int num_args,
-                                                                     bool& has_objects) {
+                                                                     int& num_objects) {
   GrowableArray<VMStorage> result(regs.length());
   int reg_idx = 0;
   for (int sig_idx = 0; sig_idx < num_args; sig_idx++) {
@@ -181,7 +181,7 @@ GrowableArray<VMStorage> ForeignGlobals::downcall_filter_offset_regs(const Growa
 
     result.push(regs.at(reg_idx++));
     if (signature[sig_idx] == T_OBJECT) {
-      has_objects = true;
+      num_objects++;
       sig_idx++; // skip offset
       reg_idx++;
     }

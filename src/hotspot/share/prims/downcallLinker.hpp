@@ -41,6 +41,10 @@ public:
                                          bool needs_transition);
 
   static void capture_state(int32_t* value_ptr, int captured_state_mask);
+  static void lock_gc(JavaThread* thread);
+  static void unlock_gc(JavaThread* thread);
+  static void pin_objects(JavaThread* thread, int num_objects, oop* oops);
+  static void unpin_objects(JavaThread* thread, int num_objects, oop* oops);
 };
 
 #endif // SHARE_VM_PRIMS_DOWNCALLLINKER_HPP

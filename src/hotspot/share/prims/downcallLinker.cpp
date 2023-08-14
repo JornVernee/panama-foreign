@@ -23,6 +23,9 @@
 
 #include "precompiled.hpp"
 #include "downcallLinker.hpp"
+#include "gc/shared/gcLocker.inline.hpp"
+#include "memory/universe.hpp"
+#include "runtime/interfaceSupport.inline.hpp"
 
 #include <cerrno>
 #ifdef _WIN64
@@ -30,7 +33,7 @@
 #include <Winsock2.h>
 #endif
 
-void DowncallLinker::capture_state(int32_t* value_ptr, int captured_state_mask) {
+JRT_LEAF(void, DowncallLinker::capture_state(int32_t* value_ptr, int captured_state_mask))
   // keep in synch with jdk.internal.foreign.abi.PreservableValues
   enum PreservableValues {
     NONE = 0,
@@ -51,4 +54,22 @@ void DowncallLinker::capture_state(int32_t* value_ptr, int captured_state_mask) 
   if (captured_state_mask & ERRNO) {
     *value_ptr = errno;
   }
-}
+JRT_END
+
+JRT_ENTRY(void, DowncallLinker::lock_gc(JavaThread* current))
+  GCLocker::lock_critical(current);
+JRT_END
+JRT_ENTRY(void, DowncallLinker::unlock_gc(JavaThread* current))
+  GCLocker::unlock_critical(current);
+JRT_END
+
+JRT_ENTRY(void, DowncallLinker::pin_objects(JavaThread* current, int num_objects, oop* oops))
+  for (int i = 0; i < num_objects; i++) {
+    Universe::heap()->pin_object(current, oops[i]);
+  }
+JRT_END
+JRT_ENTRY(void, DowncallLinker::unpin_objects(JavaThread* current, int num_objects, oop* oops))
+  for (int i = 0; i < num_objects; i++) {
+    Universe::heap()->unpin_object(current, oops[i]);
+  }
+JRT_END

@@ -24,7 +24,6 @@
 #include "precompiled.hpp"
 #include "asm/macroAssembler.hpp"
 #include "code/codeBlob.hpp"
-#include "gc/shared/gcLocker.inline.hpp"
 #include "logging/logStream.hpp"
 #include "memory/resourceArea.hpp"
 #include "prims/foreignGlobals.inline.hpp"
@@ -93,7 +92,8 @@ public:
   }
 
   void add_offset_to_oop(VMStorage reg_oop, VMStorage reg_offset, VMStorage shuffle_reg) const;
-  void add_offsets_to_oops(GrowableArray<VMStorage>& java_regs, VMStorage shuffle_reg) const;
+  void add_offsets_to_oops(const GrowableArray<VMStorage>& java_regs, VMStorage shuffle_reg) const;
+  void spill_oops(const GrowableArray<VMStorage>& java_regs, VMStorage shuffle_reg, int oop_spill_offset) const;
 
   void runtime_call(address target) const;
 };
@@ -162,7 +162,7 @@ void DowncallStubGenerator::add_offset_to_oop(VMStorage reg_oop, VMStorage reg_o
   }
 }
 
-void DowncallStubGenerator::add_offsets_to_oops(GrowableArray<VMStorage>& java_regs, VMStorage shuffle_reg) const {
+void DowncallStubGenerator::add_offsets_to_oops(const GrowableArray<VMStorage>& java_regs, VMStorage shuffle_reg) const {
   int reg_idx = 0;
   for (int sig_idx = 0; sig_idx < _num_args; sig_idx++) {
     if (_signature[sig_idx] == T_OBJECT) {
@@ -170,6 +170,27 @@ void DowncallStubGenerator::add_offsets_to_oops(GrowableArray<VMStorage>& java_r
       VMStorage reg_offset = java_regs.at(reg_idx++);
       sig_idx++; // skip offset
       add_offset_to_oop(reg_oop, reg_offset, shuffle_reg);
+    } else if (_signature[sig_idx] != T_VOID) {
+      reg_idx++;
+    }
+  }
+}
+
+void DowncallStubGenerator::spill_oops(const GrowableArray<VMStorage>& java_regs, VMStorage shuffle_reg, int oop_spill_offset) const {
+  int reg_idx = 0;
+  int store_off = oop_spill_offset;
+  for (int sig_idx = 0; sig_idx < _num_args; sig_idx++) {
+    if (_signature[sig_idx] == T_OBJECT) {
+      VMStorage reg_oop = java_regs.at(reg_idx++);
+      Address spill_addr(rsp, store_off);
+      if (reg_oop.is_reg()) {
+        __ movptr(spill_addr, as_Register(reg_oop));
+      } else {
+        assert(reg_oop.is_stack(), "expected");
+        Address oop_addr(rbp, RBP_BIAS + reg_oop.offset());
+        __ movptr(as_Register(shuffle_reg), oop_addr);
+        __ movptr(spill_addr, as_Register(shuffle_reg));
+      }
     } else if (_signature[sig_idx] != T_VOID) {
       reg_idx++;
     }
@@ -201,9 +222,10 @@ void DowncallStubGenerator::generate() {
   GrowableArray<VMStorage> java_regs;
   ForeignGlobals::java_calling_convention(_signature, _num_args, java_regs);
   RegSpiller in_reg_spiller(java_regs); // spill to lock GCLocker
-  bool has_objects = false;
+  int num_objects = 0;
+  bool pinning_supported = Universe::heap()->pinning_supported();
   GrowableArray<VMStorage> filtered_java_regs = ForeignGlobals::downcall_filter_offset_regs(java_regs, _signature,
-                                                                                             _num_args, has_objects);
+                                                                                             _num_args, num_objects);
 
   // in bytes
   int allocated_frame_size = 0;
@@ -225,12 +247,19 @@ void DowncallStubGenerator::generate() {
       : allocated_frame_size;
   }
 
-  if (has_objects) {
+  int oop_spill_offset = -1;
+  if (num_objects != 0) {
     spill_rsp_offset = 0;
     // in spill area can also be shared
     allocated_frame_size = in_reg_spiller.spill_size_bytes() > allocated_frame_size
       ? in_reg_spiller.spill_size_bytes()
       : allocated_frame_size;
+
+    if (pinning_supported) {
+      // allocate space for oops
+      oop_spill_offset = allocated_frame_size;
+      allocated_frame_size += num_objects * sizeof(oop);
+    }
   }
 
   StubLocations locs;
@@ -283,11 +312,22 @@ void DowncallStubGenerator::generate() {
     __ block_comment("} thread java2native");
   }
 
-  if (has_objects) {
+  if (num_objects != 0) {
     in_reg_spiller.generate_spill(_masm, spill_rsp_offset);
 
-    __ movptr(c_rarg0, r15_thread);
-    runtime_call(CAST_FROM_FN_PTR(address, GCLocker::lock_critical));
+    if (pinning_supported) {
+      assert(oop_spill_offset != -1, "must be set");
+      // FIXME oop maps? Not sure if they are needed since we stay in Java thread state
+      spill_oops(java_regs, shuffle_reg, oop_spill_offset);
+
+      __ movptr(c_rarg0, r15_thread);
+      __ movl(c_rarg1, num_objects);
+      __ movptr(c_rarg2, Address(rsp, oop_spill_offset));
+      runtime_call(CAST_FROM_FN_PTR(address, DowncallLinker::pin_objects));
+    } else {
+      __ movptr(c_rarg0, r15_thread);
+      runtime_call(CAST_FROM_FN_PTR(address, DowncallLinker::lock_gc));
+    }
 
     in_reg_spiller.generate_fill(_masm, spill_rsp_offset);
 
@@ -318,13 +358,21 @@ void DowncallStubGenerator::generate() {
     }
   }
 
-  if (has_objects) {
+  if (num_objects != 0) {
     if (should_save_return_value) {
       out_reg_spiller.generate_spill(_masm, spill_rsp_offset);
     }
 
-    __ movptr(c_rarg0, r15_thread);
-    runtime_call(CAST_FROM_FN_PTR(address, GCLocker::unlock_critical));
+    if (pinning_supported) {
+      assert(oop_spill_offset != -1, "must be set");
+      __ movptr(c_rarg0, r15_thread);
+      __ movl(c_rarg1, num_objects);
+      __ movptr(c_rarg2, Address(rsp, oop_spill_offset));
+      runtime_call(CAST_FROM_FN_PTR(address, DowncallLinker::unpin_objects));
+    } else {
+      __ movptr(c_rarg0, r15_thread);
+      runtime_call(CAST_FROM_FN_PTR(address, DowncallLinker::unlock_gc));
+    }
 
     if (should_save_return_value) {
       out_reg_spiller.generate_fill(_masm, spill_rsp_offset);

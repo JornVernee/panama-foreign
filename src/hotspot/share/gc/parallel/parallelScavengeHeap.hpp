@@ -275,6 +275,7 @@ class ParallelScavengeHeap : public CollectedHeap {
 
   void pin_object(JavaThread* thread, oop obj) override;
   void unpin_object(JavaThread* thread, oop obj) override;
+  bool pinning_supported() override { return false; }
 };
 
 // Class that can be used to print information about the

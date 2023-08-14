@@ -95,7 +95,7 @@ public:
   // Oop offsets are not passed on to native code.
   // Filter out the registers of oop offsets to create a list that we can pass to ArgumentShuffle.
   static GrowableArray<VMStorage> downcall_filter_offset_regs(const GrowableArray<VMStorage>& regs, BasicType* signature,
-                                                              int num_args, bool& has_objects);
+                                                              int num_args, int& num_objects);
 };
 
 // Helper class useful for generating spills and fills of a set of registers.
