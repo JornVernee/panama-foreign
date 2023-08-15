@@ -63,6 +63,7 @@ JRT_ENTRY(void, DowncallLinker::unlock_gc(JavaThread* current))
   GCLocker::unlock_critical(current);
 JRT_END
 
+// FIXME is taking a safepoint here safe with oops on the stack in caller?
 JRT_ENTRY(void, DowncallLinker::pin_objects(JavaThread* current, int num_objects, oop* oops))
   for (int i = 0; i < num_objects; i++) {
     Universe::heap()->pin_object(current, oops[i]);

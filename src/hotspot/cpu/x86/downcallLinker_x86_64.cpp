@@ -322,7 +322,7 @@ void DowncallStubGenerator::generate() {
 
       __ movptr(c_rarg0, r15_thread);
       __ movl(c_rarg1, num_objects);
-      __ movptr(c_rarg2, Address(rsp, oop_spill_offset));
+      __ lea(c_rarg2, Address(rsp, oop_spill_offset));
       runtime_call(CAST_FROM_FN_PTR(address, DowncallLinker::pin_objects));
     } else {
       __ movptr(c_rarg0, r15_thread);
@@ -367,7 +367,7 @@ void DowncallStubGenerator::generate() {
       assert(oop_spill_offset != -1, "must be set");
       __ movptr(c_rarg0, r15_thread);
       __ movl(c_rarg1, num_objects);
-      __ movptr(c_rarg2, Address(rsp, oop_spill_offset));
+      __ lea(c_rarg2, Address(rsp, oop_spill_offset));
       runtime_call(CAST_FROM_FN_PTR(address, DowncallLinker::unpin_objects));
     } else {
       __ movptr(c_rarg0, r15_thread);

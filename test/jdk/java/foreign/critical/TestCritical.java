@@ -22,9 +22,20 @@
  */
 
 /*
- * @test
+ * @test id=default_gc
  * @library ../ /test/lib
- * @run testng/othervm --enable-native-access=ALL-UNNAMED TestCritical
+ * @run testng/othervm
+ *   --enable-native-access=ALL-UNNAMED
+ *   TestCritical
+ */
+
+/*
+ * @test id=shenandoah
+ * @library ../ /test/lib
+ * @run testng/othervm
+ *   --enable-native-access=ALL-UNNAMED
+ *   -XX:+UseShenandoahGC
+ *   TestCritical
  */
 
 import org.testng.annotations.Test;
@@ -75,6 +86,17 @@ public class TestCritical extends NativeTestHelper {
             assertEquals(x, 10);
             long y = (long) vhY.get(result, 0L);
             assertEquals(y, 11);
+        }
+    }
+
+    @Test
+    public void testAllowHeap() throws Throwable {
+        MethodHandle handle = downcallHandle("mod_array", FunctionDescriptor.ofVoid(C_POINTER, C_INT), Linker.Option.critical(true));
+        int[] ints = { 0, 1, 2 };
+        MemorySegment segment = MemorySegment.ofArray(ints);
+        handle.invokeExact(segment, 3);
+        for (int i = 0; i < ints.length; i++) {
+            assertEquals(ints[i], i + 1);
         }
     }
 

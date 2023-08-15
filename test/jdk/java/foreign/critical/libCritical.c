@@ -51,3 +51,9 @@ EXPORT struct Big with_return_buffer() {
 EXPORT void do_upcall(void(*f)(void)) {
     f();
 }
+
+EXPORT void mod_array(int* arr, int num) {
+    for (int i = 0; i < num; i++) {
+        arr[i]++;
+    }
+}
