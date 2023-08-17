@@ -253,9 +253,8 @@ public abstract sealed class MemorySessionImpl
 
         static void cleanup(ResourceCleanup first) {
             ResourceCleanup current = first;
-            while (current != null) {
+            if (current != null) {
                 current.cleanup();
-                current = current.next;
             }
         }
 
@@ -276,6 +275,9 @@ public abstract sealed class MemorySessionImpl
                     @Override
                     public void cleanup() {
                         cleanupAction.run();
+                        if (next != null) {
+                            next.cleanup();
+                        }
                     }
                 };
             }
