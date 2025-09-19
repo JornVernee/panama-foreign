@@ -906,7 +906,7 @@ uint PhaseCFG::sched_call(Block* block, uint node_cnt, Node_List& worklist, Grow
 
   // Act as if the call defines the Frame Pointer.
   // Certainly the FP is alive and well after the call.
-  regs.Insert(_matcher.c_frame_pointer());
+  regs.Insert(Matcher::c_frame_pointer());
 
   // Set all registers killed and not already defined by the call.
   uint r_cnt = mcall->tf()->range()->cnt();
@@ -931,6 +931,9 @@ uint PhaseCFG::sched_call(Block* block, uint node_cnt, Node_List& worklist, Grow
       // Calling Java code so use Java calling convention
       save_policy = _matcher._register_save_policy;
       break;
+    case Op_CallNative:
+      save_policy = mcall->as_MachCallNative()->_reg_save_policy;
+      break;
 
     default:
       ShouldNotReachHere();
@@ -944,7 +947,13 @@ uint PhaseCFG::sched_call(Block* block, uint node_cnt, Node_List& worklist, Grow
   // done for oops since idealreg2debugmask takes care of debug info
   // references but there no way to handle oops differently than other
   // pointers as far as the kill mask goes.
-  bool exclude_soe = op == Op_CallRuntime;
+  //
+  // Also, native callees can not save oops, so we kill the SOE registers
+  // here in case a native call has a safepoint. This doesn't work for
+  // RBP though, which seems to be special-cased elsewhere to always be
+  // treated as alive, so we instead manually save the location of RBP
+  // before doing the native call (see NativeInvokerGenerator::generate).
+  bool exclude_soe = op == Op_CallRuntime || op == Op_CallNative;
 
   // If the call is a MethodHandle invoke, we need to exclude the
   // register which is used to save the SP value over MH invokes from
@@ -1174,7 +1183,7 @@ bool PhaseCFG::schedule_local(Block* block, GrowableArray<int>& ready_cnt, Vecto
 
     if (n->is_Mach() && n->as_Mach()->has_call()) {
       RegMask regs;
-      regs.Insert(_matcher.c_frame_pointer());
+      regs.Insert(Matcher::c_frame_pointer());
       regs.OR(n->out_RegMask());
 
       MachProjNode *proj = new MachProjNode( n, 1, RegMask::Empty, MachProjNode::fat_proj );

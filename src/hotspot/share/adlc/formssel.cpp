@@ -428,6 +428,8 @@ Form::CallType InstructForm::is_ideal_call() const {
   idx = 0;
   if(_matrule->find_type("CallLeafVector",idx))   return Form::JAVA_LEAF;
   idx = 0;
+  if(_matrule->find_type("CallNative",idx))       return Form::JAVA_NATIVE;
+  idx = 0;
 
   return Form::invalid_type;
 }
@@ -1151,6 +1153,9 @@ const char *InstructForm::mach_base_class(FormDict &globals)  const {
   }
   else if( is_ideal_call() == Form::JAVA_LEAF ) {
     return "MachCallLeafNode";
+  }
+  else if( is_ideal_call() == Form::JAVA_NATIVE ) {
+    return "MachCallNativeNode";
   }
   else if (is_ideal_return()) {
     return "MachReturnNode";

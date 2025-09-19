@@ -4279,12 +4279,24 @@ bool java_lang_invoke_LambdaForm::is_instance(oop obj) {
   return obj != nullptr && is_subclass(obj->klass());
 }
 
+int jdk_internal_foreign_abi_NativeEntryPoint::_shadow_space_offset;
+int jdk_internal_foreign_abi_NativeEntryPoint::_argMoves_offset;
+int jdk_internal_foreign_abi_NativeEntryPoint::_returnMoves_offset;
+int jdk_internal_foreign_abi_NativeEntryPoint::_needs_transition_offset;
+int jdk_internal_foreign_abi_NativeEntryPoint::_needs_return_buffer_offset;
 int jdk_internal_foreign_abi_NativeEntryPoint::_method_type_offset;
 int jdk_internal_foreign_abi_NativeEntryPoint::_downcall_stub_address_offset;
+int jdk_internal_foreign_abi_NativeEntryPoint::_c2RegSavePolicy_offset;
 
 #define NEP_FIELDS_DO(macro) \
+  macro(_shadow_space_offset,          k, "shadowSpace",         int_signature, false); \
+  macro(_argMoves_offset,              k, "argMoves",            jdk_internal_foreign_abi_VMStorage_array_signature, false); \
+  macro(_returnMoves_offset,           k, "returnMoves",         jdk_internal_foreign_abi_VMStorage_array_signature, false); \
+  macro(_needs_transition_offset,      k, "needsTransition",     bool_signature, false); \
+  macro(_needs_return_buffer_offset,   k, "needsReturnBuffer",   bool_signature, false); \
   macro(_method_type_offset,           k, "methodType",          java_lang_invoke_MethodType_signature, false); \
-  macro(_downcall_stub_address_offset, k, "downcallStubAddress", long_signature, false);
+  macro(_downcall_stub_address_offset, k, "downcallStubAddress", long_signature, false); \
+  macro(_c2RegSavePolicy_offset,       k, "c2RegSavePolicy",     string_signature, false);
 
 bool jdk_internal_foreign_abi_NativeEntryPoint::is_instance(oop obj) {
   return obj != nullptr && is_subclass(obj->klass());
@@ -4301,12 +4313,36 @@ void jdk_internal_foreign_abi_NativeEntryPoint::serialize_offsets(SerializeClosu
 }
 #endif
 
+jint jdk_internal_foreign_abi_NativeEntryPoint::shadow_space(oop entry) {
+  return entry->int_field(_shadow_space_offset);
+}
+
+oop jdk_internal_foreign_abi_NativeEntryPoint::argMoves(oop entry) {
+  return entry->obj_field(_argMoves_offset);
+}
+
+oop jdk_internal_foreign_abi_NativeEntryPoint::returnMoves(oop entry) {
+  return entry->obj_field(_returnMoves_offset);
+}
+
+jboolean jdk_internal_foreign_abi_NativeEntryPoint::needs_transition(oop entry) {
+  return entry->bool_field(_needs_transition_offset);
+}
+
+jboolean jdk_internal_foreign_abi_NativeEntryPoint::needs_return_buffer(oop entry) {
+  return entry->bool_field(_needs_return_buffer_offset);
+}
+
 oop jdk_internal_foreign_abi_NativeEntryPoint::method_type(oop entry) {
   return entry->obj_field(_method_type_offset);
 }
 
 jlong jdk_internal_foreign_abi_NativeEntryPoint::downcall_stub_address(oop entry) {
   return entry->long_field(_downcall_stub_address_offset);
+}
+
+oop jdk_internal_foreign_abi_NativeEntryPoint::c2RegSavePolicy(oop entry) {
+  return entry->obj_field(_c2RegSavePolicy_offset);
 }
 
 int jdk_internal_foreign_abi_ABIDescriptor::_inputStorage_offset;

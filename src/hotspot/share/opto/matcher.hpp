@@ -447,7 +447,7 @@ public:
   // Frame pointer. The frame pointer is kept at the base of the stack
   // and so is probably the stack pointer for most machines.  On Intel
   // it is ESP.  On the PowerPC it is R1.  On Sparc it is SP.
-  OptoReg::Name  c_frame_pointer() const;
+  static OptoReg::Name c_frame_pointer();
   static RegMask c_frame_ptr_mask;
 
   // Java-Native vector calling convention

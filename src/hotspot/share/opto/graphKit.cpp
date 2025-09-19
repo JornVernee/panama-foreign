@@ -23,6 +23,7 @@
  */
 
 #include "asm/register.hpp"
+#include "ci/ciNativeEntryPoint.hpp"
 #include "ci/ciObjArray.hpp"
 #include "ci/ciUtilities.hpp"
 #include "classfile/javaClasses.hpp"
@@ -2582,6 +2583,86 @@ Node* GraphKit::sign_extend_byte(Node* in) {
 Node* GraphKit::sign_extend_short(Node* in) {
   Node* tmp = _gvn.transform(new LShiftINode(in, _gvn.intcon(16)));
   return _gvn.transform(new RShiftINode(tmp, _gvn.intcon(16)));
+}
+
+//-----------------------------gen_native_call-------------------------------
+void GraphKit::gen_native_call(address call_addr, const TypeFunc* call_type, uint nargs, ciNativeEntryPoint* nep) {
+  assert(!nep->needs_transition(), "only trivial calls");
+
+  // Select just the actual call args to pass on
+  // [long addr, HALF addr, ... args , NativeEntryPoint nep]
+  //                      |          |
+  //                      V          V
+  //                      [ ... args ]
+  uint n_filtered_args = nargs - 3; // -addr (2), -nep;
+  ResourceMark rm;
+  Node** argument_nodes = NEW_RESOURCE_ARRAY(Node*, n_filtered_args);
+  const Type** arg_types = TypeTuple::fields(n_filtered_args);
+  GrowableArray<VMReg> arg_regs(C->comp_arena(), n_filtered_args, n_filtered_args, VMRegImpl::Bad());
+
+  VMReg* argRegs = nep->arg_moves();
+  {
+    for (uint vm_arg_pos = 0, java_arg_read_pos = 1; // +1 to skip target addr
+        vm_arg_pos < n_filtered_args; vm_arg_pos++) {
+      uint vm_unfiltered_arg_pos = vm_arg_pos + 2; // +2 to skip addr (2 since long)
+      Node* node = argument(vm_unfiltered_arg_pos);
+      const Type* type = call_type->domain()->field_at(TypeFunc::Parms + vm_unfiltered_arg_pos);
+      VMReg reg = type == Type::HALF
+        ? VMRegImpl::Bad()
+        : argRegs[java_arg_read_pos++];
+
+      argument_nodes[vm_arg_pos] = node;
+      arg_types[TypeFunc::Parms + vm_arg_pos] = type;
+      arg_regs.at_put(vm_arg_pos, reg);
+    }
+  }
+
+  uint n_returns = call_type->range()->cnt() - TypeFunc::Parms;
+  assert(n_returns < 2, "multiple return nyi");
+  GrowableArray<VMReg> ret_regs(C->comp_arena(), n_returns, n_returns, VMRegImpl::Bad());
+  const Type** ret_types = TypeTuple::fields(n_returns);
+
+  VMReg* retRegs = nep->return_moves();
+  {
+    for (uint vm_ret_pos = 0, java_ret_read_pos = 0;
+        vm_ret_pos < n_returns; vm_ret_pos++) { // 0 or 1
+      const Type* type = call_type->range()->field_at(TypeFunc::Parms + vm_ret_pos);
+      VMReg reg = type == Type::HALF
+        ? VMRegImpl::Bad()
+        : retRegs[java_ret_read_pos++];
+
+      ret_regs.at_put(vm_ret_pos, reg);
+      ret_types[TypeFunc::Parms + vm_ret_pos] = type;
+    }
+  }
+
+  const TypeFunc* new_call_type = TypeFunc::make(
+    TypeTuple::make(TypeFunc::Parms + n_filtered_args, arg_types),
+    TypeTuple::make(TypeFunc::Parms + n_returns, ret_types)
+  );
+
+  CallNode* call = new CallNativeNode(new_call_type, call_addr, "optimized linkToNative", TypePtr::BOTTOM,
+                                      arg_regs, ret_regs, nep->shadow_space(), nep->c2_reg_save_policy());
+
+  set_predefined_input_for_runtime_call(call);
+
+  for (uint i = 0; i < n_filtered_args; i++) {
+    call->init_req(i + TypeFunc::Parms, argument_nodes[i]);
+  }
+
+  Node* c = gvn().transform(call);
+  assert(c == call, "cannot disappear");
+
+  set_predefined_output_for_runtime_call(call);
+
+  Node* ret;
+  if (method() == NULL || method()->return_type()->basic_type() == T_VOID) {
+    ret = top();
+  } else {
+    ret = gvn().transform(new ProjNode(call, TypeFunc::Parms));
+  }
+
+  push_node(method()->return_type()->basic_type(), ret);
 }
 
 //------------------------------merge_memory-----------------------------------

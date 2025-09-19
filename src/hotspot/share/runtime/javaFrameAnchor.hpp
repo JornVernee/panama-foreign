@@ -39,6 +39,7 @@ class ZeroFrame;
 
 class JavaFrameAnchor {
 // Too many friends...
+friend class CallNativeDirectNode;
 friend class OptoRuntime;
 friend class Runtime1;
 friend class StubAssembler;

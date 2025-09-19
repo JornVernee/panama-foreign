@@ -29,10 +29,13 @@
 #include "memory/resourceArea.hpp"
 #include "oops/oopCast.inline.hpp"
 #include "oops/typeArrayOop.inline.hpp"
+#include "opto/optoreg.hpp"
+#include "opto/matcher.hpp"
 #include "prims/downcallLinker.hpp"
 #include "prims/foreignGlobals.inline.hpp"
 #include "runtime/interfaceSupport.inline.hpp"
 #include "runtime/jniHandles.inline.hpp"
+#include CPU_HEADER(adGlobals)
 
 JNI_ENTRY(jlong, NEP_makeDowncallStub(JNIEnv* env, jclass _unused, jobject method_type, jobject jabi,
                                       jobjectArray arg_moves, jobjectArray ret_moves,
@@ -87,6 +90,37 @@ JNI_ENTRY(jlong, NEP_makeDowncallStub(JNIEnv* env, jclass _unused, jobject metho
   return (jlong) stub->code_begin();
 JNI_END
 
+JNI_ENTRY(jstring, NEP_computeRegSavePolicy(JNIEnv* env, jclass _unused, jobjectArray volatile_regs))
+  ResourceMark rm;
+  objArrayOop volatile_regs_oop = oop_cast<objArrayOop>(JNIHandles::resolve(volatile_regs));
+  GrowableArray<OptoReg::Name> soc_regs; // FIXME use a set for faster lookup?
+  for (int i = 0; i < volatile_regs_oop->length(); i++) {
+    OptoReg::Name reg = OptoReg::as_OptoReg(as_VMReg(ForeignGlobals::parse_vmstorage(volatile_regs_oop->obj_at(i))));
+    soc_regs.append(reg);
+  }
+
+  char policy[REG_COUNT];
+  //   if      (!strcmp(calling_convention, "NS"))  callconv = 'N';
+  // else if (!strcmp(calling_convention, "SOE")) callconv = 'E';
+  // else if (!strcmp(calling_convention, "SOC")) callconv = 'C';
+  // else if (!strcmp(calling_convention, "AS"))  callconv = 'A';
+  // else                                         callconv = 'Z';
+
+  OptoReg::Name framePointer = Matcher::c_frame_pointer(); // FIXME get from ABI?
+  for (OptoReg::Name i = 0; i < REG_COUNT; i++) {
+    if (i == framePointer || i == framePointer + 1) { // RSP_num and RSP_H_num
+      policy[i] = 'N';
+    } else if (soc_regs.contains(i)) {
+      policy[i] = 'C';
+    } else {
+      policy[i] = 'E';
+    }
+  }
+
+  oop result = java_lang_String::create_oop_from_str(policy, CHECK_NULL);
+  return (jstring) JNIHandles::make_local(THREAD, result);
+JNI_END
+
 JNI_ENTRY(jboolean, NEP_freeDowncallStub(JNIEnv* env, jclass _unused, jlong invoker))
   // safe to call without code cache lock, because stub is always alive
   CodeBlob* cb = CodeCache::find_blob((char*) invoker);
@@ -105,6 +139,7 @@ JNI_END
 
 static JNINativeMethod NEP_methods[] = {
   {CC "makeDowncallStub", CC "(" METHOD_TYPE ABI_DESC VM_STORAGE_ARR VM_STORAGE_ARR "ZIZ)J", FN_PTR(NEP_makeDowncallStub)},
+  {CC "computeRegSavePolicy", CC "(" VM_STORAGE_ARR ")Ljava/lang/String;", FN_PTR(NEP_computeRegSavePolicy)},
   {CC "freeDowncallStub0", CC "(J)Z", FN_PTR(NEP_freeDowncallStub)},
 };
 

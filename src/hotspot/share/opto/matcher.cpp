@@ -1289,6 +1289,51 @@ OptoReg::Name Matcher::warp_outgoing_stk_arg( VMReg reg, OptoReg::Name begin_out
   return OptoReg::as_OptoReg(reg);
 }
 
+#ifdef ASSERT
+static void validate_calling_convention(BasicType* sig_bt, VMRegPair *parm_regs, int argcnt) {
+  auto is_upper_half = [&](int idx) -> bool {
+    // is this an upper half of T_LONG or T_DOUBLE?
+    bool is_upper_half_type = sig_bt[idx] == T_VOID;
+    if (is_upper_half_type) {
+      assert(idx != 0 && (sig_bt[idx - 1] == T_LONG || sig_bt[idx - 1] == T_DOUBLE),
+            "expecting T_LONG or T_DOUBLE before T_VOID");
+      assert(!parm_regs[idx].first()->is_valid() || !parm_regs[idx].second()->is_valid(),
+             "no registers expected for T_VOID");
+    }
+    return is_upper_half_type;
+  };
+
+  for (int i = 0; i < argcnt; i++) {
+    if (is_upper_half(i)) {
+      continue;
+    }
+    VMReg reg1 = parm_regs[i].first();
+    VMReg reg2 = parm_regs[i].second();
+    assert(reg1->is_valid() || reg2->is_valid(), "at least one half must be valid");
+
+    // look for duplicate registers
+    for (int j = 0; j < i; j++) {
+      if (is_upper_half(j)) {
+        continue;
+      }
+      VMReg reg3 = parm_regs[j].first();
+      VMReg reg4 = parm_regs[j].second();
+      if (!reg1->is_valid()) {
+        assert(!reg2->is_valid(), "valid halvsies");
+      } else if (!reg3->is_valid()) {
+        assert(!reg4->is_valid(), "valid halvsies");
+      } else {
+        assert(reg1 != reg2, "calling conv. must produce distinct regs");
+        assert(reg1 != reg3, "calling conv. must produce distinct regs");
+        assert(reg1 != reg4, "calling conv. must produce distinct regs");
+        assert(reg2 != reg3, "calling conv. must produce distinct regs");
+        assert(reg2 != reg4 || !reg2->is_valid(), "calling conv. must produce distinct regs");
+        assert(reg3 != reg4, "calling conv. must produce distinct regs");
+      }
+    }
+  }
+}
+#endif
 
 //------------------------------match_sfpt-------------------------------------
 // Helper function to match call instructions.  Calls match special.
@@ -1347,6 +1392,14 @@ MachNode *Matcher::match_sfpt( SafePointNode *sfpt ) {
       mach_call_rt->_name = call->as_CallRuntime()->_name;
       mach_call_rt->_leaf_no_fp = call->is_CallLeafNoFP();
     }
+    else if( mcall->is_MachCallNative() ) {
+      MachCallNativeNode* mach_call_native = mcall->as_MachCallNative();
+      CallNativeNode* call_native = call->as_CallNative();
+      mach_call_native->_name = call_native->_name;
+      mach_call_native->_reg_save_policy = call_native->_reg_save_policy;
+      mach_call_native->_arg_regs = call_native->_arg_regs;
+      mach_call_native->_ret_regs = call_native->_ret_regs;
+    }
     msfpt = mcall;
   }
   // This is a non-call safepoint
@@ -1381,6 +1434,8 @@ MachNode *Matcher::match_sfpt( SafePointNode *sfpt ) {
   // These are usually backing store for register arguments for varargs.
   if( call != nullptr && call->is_CallRuntime() )
     out_arg_limit_per_call = OptoReg::add(out_arg_limit_per_call,C->varargs_C_out_slots_killed());
+  if( call != NULL && call->is_CallNative() )
+    out_arg_limit_per_call = OptoReg::add(out_arg_limit_per_call, call->as_CallNative()->_shadow_space_bytes);
 
 
   // Do the normal argument list (parameters) register masks
@@ -1393,37 +1448,8 @@ MachNode *Matcher::match_sfpt( SafePointNode *sfpt ) {
       sig_bt[i] = domain->field_at(i+TypeFunc::Parms)->basic_type();
     }
     // V-call to pick proper calling convention
-    call->calling_convention( sig_bt, parm_regs, argcnt );
-
-#ifdef ASSERT
-    // Sanity check users' calling convention.  Really handy during
-    // the initial porting effort.  Fairly expensive otherwise.
-    { for (int i = 0; i<argcnt; i++) {
-      if( !parm_regs[i].first()->is_valid() &&
-          !parm_regs[i].second()->is_valid() ) continue;
-      VMReg reg1 = parm_regs[i].first();
-      VMReg reg2 = parm_regs[i].second();
-      for (int j = 0; j < i; j++) {
-        if( !parm_regs[j].first()->is_valid() &&
-            !parm_regs[j].second()->is_valid() ) continue;
-        VMReg reg3 = parm_regs[j].first();
-        VMReg reg4 = parm_regs[j].second();
-        if( !reg1->is_valid() ) {
-          assert( !reg2->is_valid(), "valid halvsies" );
-        } else if( !reg3->is_valid() ) {
-          assert( !reg4->is_valid(), "valid halvsies" );
-        } else {
-          assert( reg1 != reg2, "calling conv. must produce distinct regs");
-          assert( reg1 != reg3, "calling conv. must produce distinct regs");
-          assert( reg1 != reg4, "calling conv. must produce distinct regs");
-          assert( reg2 != reg3, "calling conv. must produce distinct regs");
-          assert( reg2 != reg4 || !reg2->is_valid(), "calling conv. must produce distinct regs");
-          assert( reg3 != reg4, "calling conv. must produce distinct regs");
-        }
-      }
-    }
-    }
-#endif
+    call->calling_convention(sig_bt, parm_regs, argcnt);
+    DEBUG_ONLY(validate_calling_convention(sig_bt, parm_regs, argcnt));
 
     // Visit each argument.  Compute its outgoing register mask.
     // Return results now can have 2 bits returned.

@@ -24,6 +24,9 @@
  */
 package jdk.internal.foreign.abi;
 
+import java.util.stream.Stream;
+import java.util.Arrays;
+
 /**
  * Carrier class used to communicate with the VM
  *
@@ -75,5 +78,12 @@ public class ABIDescriptor {
 
     public VMStorage capturedStateStorage() {
         return capturedStateStorage;
+    }
+
+    public VMStorage[] allVoltatileRegs() {
+        return Stream.of(inputStorage, outputStorage, volatileStorage)
+              .flatMap(Arrays::stream)
+              .flatMap(Arrays::stream)
+              .toArray(VMStorage[]::new);
     }
 }

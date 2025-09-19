@@ -67,10 +67,10 @@ inline VMReg as_VMReg(VMStorage vms) {
     case StorageType::INTEGER: return as_Register(vms)->as_VMReg();
     case StorageType::VECTOR:  return as_XMMRegister(vms)->as_VMReg();
     case StorageType::STACK: {
-      assert((vms.index() % VMRegImpl::stack_slot_size) == 0, "can not represent as VMReg");
-      return VMRegImpl::stack2reg(vms.index() / VMRegImpl::stack_slot_size);
+      assert((vms.offset() % VMRegImpl::stack_slot_size) == 0, "can not represent as VMReg");
+      return VMRegImpl::stack2reg(vms.offset() / VMRegImpl::stack_slot_size);
     }
-    default: ShouldNotReachHere(); return VMRegImpl::Bad();
+    default: return VMRegImpl::Bad();
   }
 }
 

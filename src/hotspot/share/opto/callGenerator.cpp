@@ -40,6 +40,7 @@
 #include "opto/subnode.hpp"
 #include "runtime/os.inline.hpp"
 #include "runtime/sharedRuntime.hpp"
+#include "ci/ciNativeEntryPoint.hpp"
 #include "utilities/debug.hpp"
 
 // Utility function.
@@ -1006,6 +1007,25 @@ CallGenerator* CallGenerator::for_method_handle_call(JVMState* jvms, ciMethod* c
   }
 }
 
+class NativeCallGenerator : public CallGenerator {
+private:
+  address _call_addr;
+  ciNativeEntryPoint* _nep;
+public:
+  NativeCallGenerator(ciMethod* m, address call_addr, ciNativeEntryPoint* nep)
+   : CallGenerator(m), _call_addr(call_addr), _nep(nep) {}
+
+  virtual JVMState* generate(JVMState* jvms);
+};
+
+JVMState* NativeCallGenerator::generate(JVMState* jvms) {
+  GraphKit kit(jvms);
+
+  kit.gen_native_call(_call_addr, tf(), method()->arg_size(), _nep);
+
+  return kit.transfer_exceptions_into_jvms();
+}
+
 CallGenerator* CallGenerator::for_method_handle_inline(JVMState* jvms, ciMethod* caller, ciMethod* callee, bool allow_inline, bool& input_not_const) {
   GraphKit kit(jvms);
   PhaseGVN& gvn = kit.gvn();
@@ -1131,8 +1151,35 @@ CallGenerator* CallGenerator::for_method_handle_inline(JVMState* jvms, ciMethod*
       }
   } break;
 
-  case vmIntrinsics::_linkToNative:
-    print_inlining_failure(C, callee, jvms, "native call");
+    case vmIntrinsics::_linkToNative:
+    if (UseL2NIntrinsic) {
+      Node* addr_n = kit.argument(0); // target address
+      Node* nep_n = kit.argument(callee->arg_size() - 1); // NativeEntryPoint
+      // This check needs to be kept in sync with the one in CallStaticJavaNode::Ideal
+      if (addr_n->Opcode() == Op_ConL && nep_n->Opcode() == Op_ConP) {
+        input_not_const = false;
+
+        const TypeOopPtr* nep_t = nep_n->bottom_type()->is_oopptr();
+        ciNativeEntryPoint* nep = nep_t->const_oop()->as_native_entry_point();
+
+        if (!nep->needs_transition()) {
+          if (nep->needs_return_buffer()) {
+            print_inlining_failure(C, callee, jvms, "needs return buffer");
+          } else {
+            const TypeLong* addr_t = addr_n->bottom_type()->is_long();
+            address addr = (address) addr_t->get_con();
+
+            return new NativeCallGenerator(callee, addr, nep);
+          }
+        } else {
+          print_inlining_failure(C, callee, jvms, "non-trivial call");
+        }
+      } else {
+        print_inlining_failure(C, callee, jvms, "NativeEntryPoint or address not constant");
+      }
+    } else {
+        print_inlining_failure(C, callee, jvms, "native call");
+    }
     break;
 
   default:

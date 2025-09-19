@@ -75,6 +75,13 @@ public class CallOverheadConstant {
     }
 
     @Benchmark
+    @Fork(value = 3, jvmArgsAppend = { "--enable-native-access=ALL-UNNAMED", "--enable-preview",
+            "-XX:+UnlockExperimentalVMOptions", "-XX:+UseL2NIntrinsic" })
+    public int panama_identity_trivial_intrin() throws Throwable {
+        return (int) identity_trivial.invokeExact(10);
+    }
+
+    @Benchmark
     public MemorySegment panama_identity_struct_confined() throws Throwable {
         return (MemorySegment) identity_struct.invokeExact(recycling_allocator, confinedPoint);
     }

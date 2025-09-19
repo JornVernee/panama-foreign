@@ -43,6 +43,15 @@ public class NativeEntryPoint {
     private final MethodType methodType;
     private final long downcallStubAddress; // read by VM
 
+    // C2
+    private final int shadowSpace;
+    private final VMStorage[] argMoves;
+    private final VMStorage[] returnMoves;
+    private final boolean needsTransition;
+    private final boolean needsReturnBuffer;
+
+    private final String c2RegSavePolicy;
+
     private static final Cleaner CLEANER = CleanerFactory.cleaner();
     private static final SoftReferenceCache<CacheKey, NativeEntryPoint> NEP_CACHE = new SoftReferenceCache<>();
     private record CacheKey(MethodType methodType, ABIDescriptor abi,
@@ -72,9 +81,17 @@ public class NativeEntryPoint {
         }
     }
 
-    private NativeEntryPoint(MethodType methodType, long downcallStubAddress) {
+    private NativeEntryPoint(MethodType methodType, long downcallStubAddress,
+                             int shadowSpace, VMStorage[] argMoves, VMStorage[] returnMoves, boolean needsTransition,
+                             boolean needsReturnBuffer,  String c2RegSavePolicy) {
         this.methodType = methodType;
         this.downcallStubAddress = downcallStubAddress;
+        this.shadowSpace = shadowSpace;
+        this.argMoves = argMoves;
+        this.returnMoves = returnMoves;
+        this.needsTransition = needsTransition;
+        this.needsReturnBuffer = needsReturnBuffer;
+        this.c2RegSavePolicy = c2RegSavePolicy;
     }
 
     public static NativeEntryPoint make(ABIDescriptor abi,
@@ -97,7 +114,9 @@ public class NativeEntryPoint {
             if (downcallStub == 0) {
                 throw new OutOfMemoryError("Failed to allocate downcall stub");
             }
-            NativeEntryPoint nep = new NativeEntryPoint(methodType, downcallStub);
+            String regSavePolicy = computeRegSavePolicy(abi.allVoltatileRegs());
+            NativeEntryPoint nep = new NativeEntryPoint(methodType, downcallStub,
+                    abi.shadowSpace, argMoves, returnMoves, needsTransition, needsReturnBuffer, regSavePolicy);
             CLEANER.register(nep, () -> freeDowncallStub(downcallStub));
             return nep;
         });
@@ -131,6 +150,7 @@ public class NativeEntryPoint {
                                                 boolean needsReturnBuffer,
                                                 int capturedStateMask,
                                                 boolean needsTransition);
+    private static native String computeRegSavePolicy(VMStorage[] allVoltatileRegs);
 
     private static native boolean freeDowncallStub0(long downcallStub);
     private static void freeDowncallStub(long downcallStub) {

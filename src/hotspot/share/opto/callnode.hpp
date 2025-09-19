@@ -49,6 +49,7 @@ class     CallRuntimeNode;
 class       CallLeafNode;
 class         CallLeafNoFPNode;
 class         CallLeafVectorNode;
+class     CallNativeNode;
 class     AllocateNode;
 class       AllocateArrayNode;
 class     AbstractLockNode;
@@ -928,6 +929,7 @@ public:
 #endif
 };
 
+
 /* A pure function call, they are assumed not to be safepoints, not to read or write memory,
  * have no exception... They just take parameters, return a value without side effect. It is
  * always correct to create some, or remove them, if the result is not used.
@@ -953,6 +955,42 @@ public:
   }
   int Opcode() const override;
   Node* Ideal(PhaseGVN* phase, bool can_reshape) override;
+};
+
+//------------------------------CallNativeNode-----------------------------------
+// Make a direct call into a foreign function with an arbitrary ABI
+// safepoints
+class CallNativeNode : public CallNode {
+  friend class MachCallNativeNode;
+  virtual bool cmp( const Node &n ) const;
+  virtual uint size_of() const;
+  static void print_regs(const GrowableArray<VMReg>& regs, outputStream* st);
+public:
+  GrowableArray<VMReg> _arg_regs;
+  GrowableArray<VMReg> _ret_regs;
+  const int _shadow_space_bytes;
+  const char* _reg_save_policy;
+
+  CallNativeNode(const TypeFunc* tf, address addr, const char* name,
+                 const TypePtr* adr_type,
+                 const GrowableArray<VMReg>& arg_regs,
+                 const GrowableArray<VMReg>& ret_regs,
+                 int shadow_space_bytes,
+                 const char* reg_save_policy)
+    : CallNode(tf, addr, adr_type), _arg_regs(arg_regs),
+      _ret_regs(ret_regs), _shadow_space_bytes(shadow_space_bytes),
+      _reg_save_policy(reg_save_policy)
+  {
+    init_class_id(Class_CallNative);
+    _name = name;
+  }
+  virtual int   Opcode() const;
+  virtual bool  guaranteed_safepoint()  { return false; }
+  virtual Node* match(const ProjNode *proj, const Matcher *m);
+  virtual void  calling_convention( BasicType* sig_bt, VMRegPair *parm_regs, uint argcnt ) const;
+#ifndef PRODUCT
+  virtual void  dump_spec(outputStream *st) const;
+#endif
 };
 
 //------------------------------CallLeafNoFPNode-------------------------------
